@@ -1,0 +1,43 @@
+@startuml _template
+' ============================================================
+' 模板文件：复制本文件改名为你的图，保留头部 skinparam
+' 渲染：VS Code PlantUML 插件 Alt+D；或 java -jar plantuml.jar -tsvg xx.puml
+' 注意：中文字体必须指定，否则导出乱码
+' ============================================================
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 13
+skinparam shadowing false
+skinparam backgroundColor #FFFFFF
+skinparam ArrowColor #4A5568
+skinparam rectangle {
+  BackgroundColor #EBF4FF
+  BorderColor #4A90D9
+}
+
+title 图 X-X  示例：存款用例时序（改为你的图名）
+
+actor 客户 as Customer
+participant "前端页面" as Web
+participant "交易服务" as Tx
+participant "账户服务" as Acc
+database "MySQL" as DB
+
+Customer -> Web : 输入存款金额
+Web -> Tx : POST /api/deposit {accountNo, amount, requestId}
+Tx -> Tx : 参数校验 + 幂等检查
+alt 校验失败
+  Tx --> Web : 400 错误码 1000
+else 校验通过
+  Tx -> Acc : 查询账户状态
+  Acc -> DB : select account
+  DB --> Acc : account
+  Acc --> Tx : 状态正常
+  Tx -> Acc : 增加余额
+  Acc -> DB : update balance
+  Acc --> Tx : success
+  Tx -> DB : insert transaction(requestId 唯一)
+  Tx --> Web : 200 {balance}
+end
+Web --> Customer : 展示"存款成功，当前余额"
+
+@enduml

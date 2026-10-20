@@ -1,0 +1,71 @@
+@startuml overview
+' ============================================================
+' 系统总用例图（骨架）
+' 状态：待完善 —— 请小组在实验一中讨论后补充/删减用例
+' 对应报告：图 1-1
+' ============================================================
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 13
+skinparam shadowing false
+skinparam backgroundColor #FFFFFF
+skinparam packageStyle rectangle
+
+left to right direction
+
+actor "客户" as Customer
+actor "风控管理员" as RiskAdmin
+actor "系统管理员" as SysAdmin
+
+rectangle "数字银行核心业务系统" {
+  package "客户与身份" {
+    usecase "注册与实名认证" as UC01
+    usecase "登录" as UC02
+    usecase "维护个人资料" as UC03
+  }
+  package "账户管理" {
+    usecase "开立账户" as UC10
+    usecase "查询余额" as UC11
+    usecase "查询账户列表" as UC12
+    usecase "冻结/解冻账户" as UC13
+  }
+  package "交易核心" {
+    usecase "存款" as UC20
+    usecase "取款" as UC21
+    usecase "本行转账" as UC22
+    usecase "跨行转账" as UC23
+    usecase "查询交易流水" as UC24
+  }
+  package "风控" {
+    usecase "风控规则校验" as UC30
+    usecase "查看拦截记录" as UC33
+  }
+}
+
+Customer --> UC01
+Customer --> UC02
+Customer --> UC03
+Customer --> UC10
+Customer --> UC11
+Customer --> UC12
+Customer --> UC20
+Customer --> UC21
+Customer --> UC22
+Customer --> UC23
+Customer --> UC24
+
+RiskAdmin --> UC33
+SysAdmin --> UC13
+
+' 包含关系：存款/取款/转账都触发风控校验
+UC20 ..> UC30 : <<include>>
+UC21 ..> UC30 : <<include>>
+UC22 ..> UC30 : <<include>>
+UC23 ..> UC30 : <<include>>
+
+' TODO 小组讨论后确认：
+' 1. 是否需要"柜员"角色（线下网点场景）？
+' 2. "跨行转账"是否拆出"清算行"作为外部参与者（External System）？
+' 3. 冻结账户是否允许客户自助申请（应是管理员操作）？
+' 4. 是否补充"对账"用例？
+
+@enduml
