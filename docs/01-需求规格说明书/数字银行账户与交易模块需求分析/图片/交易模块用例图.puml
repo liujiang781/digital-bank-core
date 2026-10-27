@@ -1,0 +1,58 @@
+@startuml
+title 数字银行模拟系统——交易模块用例图
+left to right direction
+skinparam defaultFontName Microsoft YaHei
+skinparam shadowing false
+skinparam backgroundColor white
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+actor "客户\nACT-C" as C
+actor "授权运营人员\nACT-O" as O
+actor "模拟资金渠道\nACT-F" as F
+actor "模拟外部银行\nACT-B" as B
+rectangle "数字银行模拟系统 / 交易模块" {
+  usecase "UC-TR-01\n存款" as DP
+  usecase "UC-TR-02\n取款" as WD
+  usecase "UC-TR-03\n行内转账" as IT
+  usecase "UC-TR-04\n跨行转账" as XB
+  usecase "UC-TR-05\n查询交易结果" as RES
+  usecase "UC-TR-06\n查询交易流水" as LOG
+  usecase "UC-TR-07\n下载交易回单" as RECEIPT
+  usecase "UC-TR-08\n核对待确认交易" as CHECK
+  usecase "UC-TR-09\n重试资金恢复" as RECOVER
+  usecase "执行交易风控检查\n（公共子用例）" as RISK
+}
+C -- DP
+C -- WD
+C -- IT
+C -- XB
+C -- RES
+C -- LOG
+C -- RECEIPT
+O -- RES
+O -- LOG
+O -- RECEIPT
+O -- CHECK
+O -- RECOVER
+DP -- F
+WD -- F
+CHECK -- F
+XB -- B
+CHECK -- B
+DP ..> RISK : <<include>>
+WD ..> RISK : <<include>>
+IT ..> RISK : <<include>>
+XB ..> RISK : <<include>>
+note bottom of RES
+  requestId 仅定位原业务，不替代权限。
+  提交响应丢失可凭本人原 requestId 查询。
+end note
+note bottom of RECOVER
+  仅恢复有明确失败依据的 RECOVERING 交易。
+  外部未知不得退款，外部成功仅补本地完成。
+end note
+note bottom of RISK
+  内部风控检查不是系统外参与者；
+  不把公共校验步骤计作基本用例。
+end note
+@enduml

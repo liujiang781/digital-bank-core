@@ -1,0 +1,72 @@
+@startuml
+title UC-TR-01 存款活动图
+skinparam defaultFontName Microsoft YaHei
+skinparam shadowing false
+skinparam backgroundColor white
+start
+partition 客户 {
+  :选择本人账户、金额、CNY；\n以 requestId 提交;
+}
+partition 数字银行系统 {
+  :认证并检查账户归属;
+  if (有权操作？) then (否)
+    :拒绝，不泄露他人信息;
+    stop
+  else (是)
+  endif
+  if (原请求已存在？) then (是)
+    if (内容一致？) then (是)
+      :返回原 tradeNo 与状态；\n不再次入账或请求渠道;
+    else (否)
+      :返回 requestId 内容冲突;
+    endif
+    stop
+  else (否)
+  endif
+  :登记 tradeNo / RECEIVED；\n校验金额、币种、NORMAL、单笔50,000；\n执行交易风控检查;
+  if (全部通过？) then (否)
+    :REJECTED；B/R 不变;
+    stop
+  else (是)
+  endif
+  :PROCESSING；B/R 不变；\n以原 tradeNo 请求模拟资金渠道;
+}
+partition 模拟资金渠道 {
+  :受理并返回结果或超时;
+}
+partition 数字银行系统 {
+  :验证来源、业务号、金额、账户、币种;
+  if (已获得明确且匹配的最终结果？) then (否)
+    :PENDING_CONFIRMATION；不提前入账;
+    :自动查询 / UC-TR-08 核对入口；\n按原 tradeNo 查询或接收合法迟到回执;
+    if (结果仍未知或证据不匹配？) then (是)
+      :保持待确认；记录查询与后续待办；\n不凭超时认定失败;
+      stop
+    else (否)
+    endif
+  else (是)
+  endif
+  if (渠道明确成功？) then (是)
+    repeat
+      :幂等完成 B 加金额、唯一入账流水；\nR 不变;
+      if (本地资金与流水均完整？) then (是)
+        :SUCCESS；展示可查询结果;
+        stop
+      else (否)
+        :PROCESSING / PENDING_CONFIRMATION；\n保留渠道成功依据;
+        :本地完成重试入口；\n仅补同一入账与流水，不重发渠道业务;
+      endif
+    repeat while (现在继续重试？) is (是) not (否)
+    :保持待处理，等待自动或运营继续;
+    stop
+  else (明确失败且未入账)
+    :保存明确失败依据；FAILED；\nB/R 不变，不生成入账或退款流水;
+    stop
+  endif
+}
+legend bottom
+已受理后账户冻结不阻断原交易确认。
+重复回执不再次入账；终态矛盾转审查，不直接改余额。
+存款不要求已有余额；存款未知不增加 B，也不占用 R。
+endlegend
+@enduml

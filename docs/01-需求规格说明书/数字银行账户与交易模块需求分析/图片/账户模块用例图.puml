@@ -1,0 +1,61 @@
+@startuml
+title 数字银行模拟系统——账户模块用例图
+left to right direction
+skinparam defaultFontName Microsoft YaHei
+skinparam shadowing false
+skinparam backgroundColor white
+skinparam packageStyle rectangle
+skinparam actorStyle awesome
+skinparam usecase {
+  BackgroundColor #F4F8FC
+  BorderColor #47627D
+  FontColor #203040
+}
+skinparam rectangle {
+  BorderColor #52677D
+  FontColor #203040
+}
+
+actor "客户\nACT-C" as C
+actor "运营人员\nACT-O" as O
+actor "风控专员\nACT-R" as R
+
+rectangle "账户模块" {
+  usecase "UC-AC-01\n开立账户" as AC01
+  usecase "UC-AC-02\n查询账户列表" as AC02
+  usecase "UC-AC-03\n查询账户详情" as AC03
+  usecase "UC-AC-04\n查询余额" as AC04
+  usecase "UC-AC-05\n冻结账户" as AC05
+  usecase "UC-AC-06\n解冻账户" as AC06
+  usecase "UC-AC-07\n注销账户" as AC07
+  usecase "UC-AC-08\n设置个人交易限额" as AC08
+  usecase "UC-AC-09\n查询账户操作记录" as AC09
+}
+
+C --> AC01
+C --> AC02
+C --> AC03
+C --> AC04
+C --> AC07
+C --> AC08
+C --> AC09
+
+O --> AC02
+O --> AC03
+O --> AC04
+O --> AC05
+O --> AC06
+O --> AC09
+
+R --> AC02
+R --> AC03
+R --> AC04
+R --> AC05
+R --> AC09
+
+legend bottom
+  客户仅操作本人账户；工作人员须在授权范围内操作。
+  风控只提供风险解除依据；账户解冻由运营人员执行。
+  所有有效冻结原因均已解除，账户才可恢复正常。
+endlegend
+@enduml
