@@ -1,0 +1,58 @@
+@startuml idempotency
+' ============================================================
+' 图 2-12 幂等校验活动图（与 B 的类模型对齐，单页紧凑版）
+' 对应规则：BR-11/12
+' 负责人：C（交易与风控域）
+' 说明：采用 B 的 IdempotencyService.claimOrLoad 与
+'       (identityId, businessType, requestId) + requestHash。
+' ============================================================
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 10
+skinparam shadowing false
+skinparam backgroundColor #FFFFFF
+skinparam ArrowColor #4A5568
+skinparam padding 1
+skinparam nodesep 8
+skinparam ranksep 12
+skinparam activity {
+  BackgroundColor #EBF4FF
+  BorderColor #4A90D9
+}
+skinparam activityDiamond {
+  BackgroundColor #FFF4E6
+  BorderColor #D97706
+}
+
+title 图 2-12 幂等校验活动图（BR-11/12）
+
+start
+:接收请求\n(identityId, businessType, requestId, requestHash);
+:AccessService.authenticate\n+ requireAccountAccess（BR-20）;
+
+if (未通过？) then (是)
+  :返回 401/403;\n不泄露他人交易信息;
+  stop
+endif
+
+:IdempotencyService.claimOrLoad(...);
+
+if (decision = EXISTING_SAME？) then (是)
+  :返回原 Transaction.snapshot();\n不产生第二次资金效果;
+  stop
+else (否)
+  if (decision = CONFLICT？) then (是)
+    :返回 409 REQUEST_CONFLICT;\n不覆盖原结果;
+    stop
+  else (NEW)
+    if (金额合法？BR-01) then (是)
+      :INSERT Transaction(RECEIVED);
+      :进入风控 / 预留 / 提交流程;
+      stop
+    else (否)
+      :complete(技术拒绝)；\n不建 Transaction、不写 FundEntry;
+      stop
+    endif
+  endif
+endif
+
+@enduml

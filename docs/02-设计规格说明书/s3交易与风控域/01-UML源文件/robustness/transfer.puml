@@ -1,0 +1,80 @@
+@startuml transfer-robustness
+' ============================================================
+' 图 2-7 本行转账鲁棒图（与 B 的类模型对齐，单页紧凑版）
+' 对应用例：UC-TR-03 行内转账
+' 负责人：C（交易与风控域）
+' 说明：类名、实体字段按 B《交接D》；AccessService/IdempotencyService 复用 B 的控制类。
+' ============================================================
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 10
+skinparam shadowing false
+skinparam backgroundColor #FFFFFF
+skinparam ArrowColor #4A5568
+skinparam nodesep 15
+skinparam ranksep 20
+skinparam packageStyle rectangle
+skinparam boundary {
+  BackgroundColor #FFF4E6
+  BorderColor #D97706
+}
+skinparam control {
+  BackgroundColor #EBF4FF
+  BorderColor #4A90D9
+}
+skinparam entity {
+  BackgroundColor #F0FFF4
+  BorderColor #38A169
+}
+
+title 图 2-7 本行转账鲁棒图（UC-TR-03）
+
+package "边界层" {
+  boundary "转账表单\nTransferForm" as TransferForm
+  boundary "转账接口\nTransferController" as TransferController
+}
+
+package "控制层" {
+  control "转账服务\nTransferService" as TransferService
+  control "风控校验\nRiskCheckService" as RiskCheckService
+  control "资金提交\nPostingService" as PostingService
+}
+
+package "实体层" {
+  entity "付款账户\nAccount" as PayerAccount
+  entity "收款账户\nAccount" as PayeeAccount
+  entity "交易\nTransaction" as Transaction
+  entity "转账单\nTransferOrder" as TransferOrder
+  entity "资金流水\nFundEntry" as FundEntry
+  entity "风控规则\nRiskRule" as RiskRule
+  entity "风险事件\nRiskEvent" as RiskEvent
+}
+
+TransferForm --> TransferController : submitTransfer()
+TransferController --> TransferService : createTransfer()
+TransferService --> RiskCheckService : checkOutgoing()
+TransferService --> PostingService : reserve / post / release
+TransferService --> Transaction : 状态推进
+TransferService --> TransferOrder : 创建转账单
+RiskCheckService --> PayerAccount : 读状态与限额
+RiskCheckService --> PayeeAccount : 读状态
+RiskCheckService --> RiskRule : evaluateOutgoing()
+RiskCheckService --> RiskEvent : 命中留痕
+PostingService --> PayerAccount : reserve / debitReserved / release
+PostingService --> PayeeAccount : credit
+PostingService --> FundEntry : debitOf / creditOf
+PostingService --> Transaction : markProcessing / markSucceeded
+
+note right of TransferService
+  AccessService / IdempotencyService
+  复用 B 的控制类：
+  权限先于幂等，幂等先于资金动作。
+  边界类不得直接连实体类。
+end note
+
+note bottom of RiskCheckService
+  状态(BR-03) → 单笔(BR-05/06)
+  → 日累计(BR-05/07)；
+  拒绝写 RiskEvent，不写 FundEntry(BR-19)。
+end note
+
+@enduml
