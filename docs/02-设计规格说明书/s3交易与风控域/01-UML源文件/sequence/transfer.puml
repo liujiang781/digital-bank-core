@@ -1,0 +1,74 @@
+@startuml transfer-sequence
+' ============================================================
+' 图 2-8 本行转账序列图（与 B 的类模型对齐，单页紧凑版）
+' 对应用例：UC-TR-03 行内转账
+' 负责人：C（交易与风控域）
+' 说明：控制类采用 B 的 AccessService/IdempotencyService/PostingService；
+'       状态采用 B 的 PENDING/SUCCEEDED；TransferOrder 使用 clearingStatus。
+' ============================================================
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 8
+skinparam shadowing false
+skinparam backgroundColor #FFFFFF
+skinparam ArrowColor #4A5568
+skinparam sequenceMessageAlign left
+skinparam responseMessageBelowArrow true
+skinparam sequenceGroupBodyPadding 0
+skinparam sequenceGroupHeaderPadding 0
+skinparam sequenceBoxPadding 0
+hide footbox
+
+title 图 2-8 本行转账序列图（UC-TR-03）
+
+actor "客户" as C
+participant "TransferController" as Ctrl
+participant "TransferService" as TS
+participant "AccessService" as AS
+participant "IdempotencyService" as IS
+participant "RiskCheckService" as RS
+participant "PostingService" as PS
+database "MySQL" as DB
+
+C -> Ctrl : submitTransfer(cmd)
+Ctrl -> TS : createTransfer(cmd, identity)
+TS -> AS : authenticate + requireAccountAccess\n(INTERNAL_TRANSFER, payer)
+AS --> TS : OK / 403
+
+TS -> IS : claimOrLoad(identityId, INTERNAL_TRANSFER,\nrequestId, requestHash)
+alt EXISTING_SAME
+  IS --> TS : EXISTING_SAME + 原 snapshot
+  TS --> Ctrl : 原 snapshot
+else CONFLICT
+  IS --> TS : CONFLICT
+  TS --> Ctrl : 409 REQUEST_CONFLICT
+else NEW
+  IS --> TS : NEW
+  note right of TS : 金额非法：IS.complete(技术拒绝)\n不建 Transaction、不写 FundEntry
+  TS -> DB : INSERT Transaction(RECEIVED)
+  TS -> RS : checkOutgoing(payer, payee, amount,\ntradeNo, identityId)
+  alt REJECT
+    RS -> DB : INSERT RiskEvent
+    RS --> TS : REJECT
+    TS -> DB : Transaction.markRejected()
+    TS --> Ctrl : 422；不写 FundEntry
+  else PASS
+    TS -> DB : INSERT TransferOrder(INTERNAL,\nclearingStatus=NOT_APPLICABLE)
+    TS -> PS : reserve(payer, amount, tradeNo)
+    PS -> DB : Account.reserve；\nTransaction.markProcessing
+    PS --> TS : reserved
+    TS -> PS : postInternalTransfer(tradeNo, payer, payee, amount)
+    PS -> DB : 锁双方 Account；\ndebitReserved / credit；\nINSERT FundEntry OUT/IN；\nTransaction.markSucceeded
+    alt SUCCEEDED
+      PS --> TS : COMMITTED
+      TS --> Ctrl : 200 SUCCEEDED
+    else failed
+      PS --> TS : failed
+      TS -> PS : releaseReservation(payer, amount, tradeNo)
+      PS -> DB : Account.release；\nTransaction.markFailed / markRecovering
+      PS --> TS : FAILED / RECOVERING
+      TS --> Ctrl : 200 / 202
+    end
+  end
+end
+
+@enduml
