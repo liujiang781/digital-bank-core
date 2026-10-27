@@ -1,0 +1,265 @@
+@startuml design-class-core
+!pragma layout smetana
+title 图 2-6（a）设计类图：七个核心实体
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 15
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype ortho
+skinparam nodesep 55
+skinparam ranksep 60
+hide empty members
+left to right direction
+
+class Customer <<entity>> {
+  - customerId: String
+  - identityId: String
+  - realNameStatus: RealNameStatus
+}
+class Account <<entity>> {
+  - accountId: String
+  - customerId: String
+  - currency: Currency
+  - status: AccountStatus
+  - bookBalance: Decimal
+  - reservedAmount: Decimal
+  - activeFreezeReasonIds: Set<String>
+  - personalSingleLimit: Decimal [0..1]
+  - personalDailyLimit: Decimal [0..1]
+  - version: Integer
+  + availableBalance(): Decimal
+  + assertCanAcceptNewDeposit(): void
+  + credit(amount: Decimal): void
+  + reserve(amount: Decimal): void
+  + debitReserved(amount: Decimal): void
+  + release(amount: Decimal): void
+}
+class Transaction <<entity>> {
+  - tradeNo: String
+  - identityId: String
+  - businessType: BusinessType
+  - requestId: String
+  - requestHash: String
+  - accountId: String
+  - amount: Decimal
+  - currency: Currency
+  - status: TransactionStatus
+  - createdAt: Instant
+  - acceptedAt: Instant [0..1]
+  - completedAt: Instant [0..1]
+  - channelEvidenceId: String [0..1]
+  - lastChannelResult: ChannelResultCode [0..1]
+  - lastCheckedAt: Instant [0..1]
+  - failureReason: String [0..1]
+  + snapshot(): TransactionSnapshot
+  + markProcessing(): void
+  + markPending(): void
+  + markSucceeded(): void
+  + markFailed(): void
+  + markRejected(): void
+  + isTerminal(): Boolean
+  + recordEvidence(result: ChannelResult): void
+}
+class FundEntry <<entity>> {
+  - entryId: String
+  - tradeNo: String
+  - accountId: String
+  - entryRole: EntryRole
+  - direction: EntryDirection
+  - amount: Decimal
+  - bookBalanceAfter: Decimal
+  - occurredAt: Instant
+  {static} + creditOf(): FundEntry
+  {static} + debitOf(): FundEntry
+}
+class TransferOrder <<entity, C协作建议>> {
+  - transferId: String
+  - tradeNo: String
+  - transferType: TransferType
+  - payerAccountId: String
+  - payeeAccountId: String [0..1]
+  - externalBankCode: String [0..1]
+  - externalPayeeRef: String [0..1]
+  - amount: Decimal
+  - currency: Currency
+  - clearingStatus: ClearingStatus
+  + snapshot(): TransferSnapshot
+}
+class RiskRule <<entity, C协作建议>> {
+  - ruleId: String
+  - ruleType: RuleType
+  - depositSingleLimit: Decimal
+  - outgoingSingleLimit: Decimal
+  - outgoingDailyLimit: Decimal
+  - enabled: Boolean
+  - ruleVersion: Integer
+  + validateDepositAmount(amount: Decimal, currency: Currency): void
+  + evaluateOutgoing(): RiskDecision
+}
+class RiskEvent <<entity, C协作建议>> {
+  - eventId: String
+  - tradeNo: String
+  - ruleId: String
+  - ruleVersion: Integer
+  - operatorIdentityId: String
+  - occurredAt: Instant
+  - reasonCode: String
+  - result: RiskDecision
+  + snapshot(): RiskEventSnapshot
+}
+
+Customer "1" -- "0..*" Account : 本人历史账户
+Account "1" -- "0..*" Transaction : 请求主账户
+Account "1" -- "0..*" FundEntry : 资金归属
+Transaction "1" -- "0..*" FundEntry : 实际资金事件
+Transaction "1" -- "0..1" TransferOrder : 转账明细
+Account "1" -- "0..*" TransferOrder : payer / 付款方
+Account "0..1" -- "0..*" TransferOrder : payee / 行内收款方
+Transaction "1" -- "0..*" RiskEvent : 规则拦截
+RiskRule "1" -- "0..*" RiskEvent : 命中版本
+
+note top of Account
+  BR-02：未注销账户数 ≤ 3，历史总数不限。
+  BR-04：A=B-R；B≥0；0≤R≤B。
+  AccountStatus = NORMAL / FROZEN / CLOSED。
+  新存款准入与受理提交须重检状态。
+  UC-AC-07：注销须 B=R=0 且无未决交易。
+  解冻：全部有效限制解除、具风险解除依据并经运营授权。
+end note
+note bottom of Transaction
+  幂等键 = (identityId, businessType, requestId)。
+  requestHash 使用规范化业务内容；同键异内容冲突。
+  状态：RECEIVED、REJECTED、PROCESSING、PENDING、
+  SUCCEEDED、RECOVERING、FAILED。
+  markPending() 不得覆盖终态；旧已受理继续确认。
+end note
+note bottom of FundEntry
+  仅实际资金事件生成；不可修改或删除。
+  建议唯一约束：(tradeNo, accountId, entryRole)。
+  入账 + 新流水 + 交易成功必须同一业务提交。
+end note
+note bottom of TransferOrder
+  本行转账必须有 payeeAccountId。
+  跨行使用外部银行及收款标识；payer 必为本行账户。
+  C 相关属性和操作是本地协作建议，尚未经 C 确认。
+end note
+legend bottom
+  来源：本地《实验一需求规格说明书》整合版 v1.2，表1-4、BR-01～05、BR-09、BR-11/12～20。
+  私有属性用“-”，公开操作用“+”；类型为设计概念；值对象与枚举在属性交接表定义。
+endlegend
+@enduml
+
+@startuml design-class-collaboration
+!pragma layout smetana
+title 图 2-6（b）设计类图：账户域协作类
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 15
+skinparam classAttributeIconSize 0
+skinparam shadowing false
+skinparam linetype ortho
+skinparam nodesep 45
+skinparam ranksep 55
+hide empty members
+top to bottom direction
+
+package "边界类" {
+  class DepositForm <<boundary>> {
+    + submitDeposit(): DepositRequest
+  }
+  class AccountQueryView <<boundary>> {
+    + showBalance(): void
+  }
+  class DepositController <<boundary>> {
+    + deposit(): DepositResult
+  }
+  class AccountQueryController <<boundary>> {
+    + queryBalance(): BalanceSnapshot
+  }
+  class ChannelGateway <<boundary>> {
+    + requestDeposit(tradeNo: String, accountId: String, amount: Decimal, currency: Currency): ChannelResult
+    + queryResult(tradeNo: String): ChannelResult
+    + verifyResult(transaction: TransactionSnapshot, result: ChannelResult): Boolean
+  }
+}
+package "控制类" {
+  class AccessService <<control>> {
+    + authenticate(): Identity
+    + requireAccountAccess(): void
+    + requireAcceptedTradeAccess(): void
+  }
+  class DepositService <<control>> {
+    + deposit(): DepositResult
+    + confirmDeposit(tradeNo: String, result: ChannelResult): DepositResult
+    + queryAcceptedDeposit(tradeNo: String): DepositResult
+  }
+  class IdempotencyService <<control>> {
+    + claimOrLoad(identityId: String, businessType: BusinessType, requestId: String, payloadHash: String): IdempotencyDecision
+    + complete(): void
+  }
+  class AccountQueryService <<control>> {
+    + queryBalance(): BalanceSnapshot
+  }
+  class PostingService <<control>> {
+    + completeDeposit(tradeNo: String, result: ChannelResult): PostingOutcome
+    + recordFailure(tradeNo: String, proof: String): PostingOutcome
+  }
+}
+package "实体（详情见图2-6a）" {
+  class Account <<entity>>
+  class Transaction <<entity>>
+  class FundEntry <<entity>>
+  class RiskRule <<entity>>
+}
+
+DepositForm ..> DepositController
+AccountQueryView ..> AccountQueryController
+DepositController ..> AccessService
+DepositController ..> DepositService
+AccountQueryController ..> AccessService
+AccountQueryController ..> AccountQueryService
+DepositService ..> AccessService
+DepositService ..> IdempotencyService
+DepositService ..> ChannelGateway
+DepositService ..> PostingService
+DepositService ..> Account
+DepositService ..> Transaction
+DepositService ..> RiskRule
+PostingService ..> Account
+PostingService ..> Transaction
+PostingService ..> FundEntry
+AccountQueryService ..> Account
+IdempotencyService ..> Transaction
+DepositService -[hidden]down-> AccessService
+AccessService -[hidden]down-> IdempotencyService
+IdempotencyService -[hidden]down-> PostingService
+
+note left of AccessService
+  requireAccountAccess 同时检查操作与对象范围。
+  DEPOSIT：仅 ACT-C 本人账户。
+  READ_BALANCE：本人或具岗位及对象授权的后台。
+  余额查询授权不授予存款权限。
+end note
+
+note right of PostingService
+  技术无关的一致性边界：
+  同一业务提交更新余额、追加流水、写成功终态；
+  失败整体回滚，保留已验证依据供原交易重试。
+  序列化竞争确认并去重，不因受理后的冻结拒绝。
+  冲突终态或不一致渠道回执转人工核对。
+end note
+note left of IdempotencyService
+  授权后再查幂等结果。
+  并发 claim 只能创建一个受理候选。
+  同内容返回原状态，异内容返回冲突。
+  complete 记录可重建结果，不替代交易主状态。
+end note
+note bottom of AccountQueryService
+  从同一一致性快照返回 B、R、A、状态；
+  冻结账户允许授权只读查询。
+end note
+legend bottom
+  设计新增的边界和控制类，不冒充实验一分析类；接口 Controller 按系统入口归为边界。
+  省略请求上下文参数的操作，以请求对象/身份上下文传入；完整语义见正文。
+  界面只依赖控制类；ChannelGateway 以控制层传入的快照验证渠道依据，不读写实体存储。
+endlegend
+@enduml
