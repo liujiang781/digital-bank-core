@@ -1,0 +1,45 @@
+{
+  "status": "passed",
+  "sourceFiles": 4,
+  "panels": 6,
+  "classes": 17,
+  "attributes": 62,
+  "operations": 38,
+  "checkedLocalLinks": 47,
+  "previewLinks": 24,
+  "brokenLinks": 0,
+  "sourceFilesUnchanged": true,
+  "diagrams": [
+    {
+      "panel": "deposit-robustness",
+      "width": 1874,
+      "height": 711
+    },
+    {
+      "panel": "deposit-request",
+      "width": 2254,
+      "height": 2656
+    },
+    {
+      "panel": "deposit-confirmation",
+      "width": 1536,
+      "height": 2318
+    },
+    {
+      "panel": "account-query",
+      "width": 1615,
+      "height": 1367
+    },
+    {
+      "panel": "design-class-core",
+      "width": 2022,
+      "height": 1697
+    },
+    {
+      "panel": "design-class-collaboration",
+      "width": 2087,
+      "height": 1256
+    }
+  ],
+  "limits": "静态设计及渲染验证；未运行银行功能、数据库、并发故障或性能测试。"
+}
