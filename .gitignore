@@ -91,3 +91,5 @@ redis-data/
 
 # ---- UML 导出（保留源文件，可选忽略大量图片）----
 # docs/uml/out/*.png
+
+!/docs/02-设计规格说明书/s2-实验2/docs/uml/out/
