@@ -1,0 +1,34 @@
+@startuml
+skinparam defaultFontName "Microsoft YaHei"
+title 图 1-7 核心领域概念模型（按现有整合稿重建）
+class "Customer" as C {
+  身份与实名状态
+}
+class "Account" as A {
+  账户状态及 B、R、A
+}
+class "Transaction" as T {
+  请求、处理状态与 requestId
+}
+class "FundEntry" as F {
+  实际资金变动；只追加
+}
+class "TransferOrder" as O {
+  付款和收款账户；模拟跨行状态
+}
+class "RiskRule" as RR {
+  单笔及日累计限额
+}
+class "RiskEvent" as RE {
+  规则命中与原因
+}
+C "1" -- "0..*" A : 拥有
+A "1" -- "0..*" T : 关联
+T "1" -- "0..*" F : 产生
+T "1" -- "0..1" O : 对应
+RR "1" -- "0..*" RE : 触发
+T "1" -- "0..*" RE : 关联
+note bottom of A
+A = B - R；B >= 0；0 <= R <= B
+end note
+@enduml
