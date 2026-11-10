@@ -36,6 +36,7 @@ import org.springframework.test.context.jdbc.Sql;
 import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest
+@org.springframework.context.annotation.Import(SessionVerifierTestConfiguration.class)
 @ActiveProfiles("test")
 @AutoConfigureMockMvc
 @Sql(scripts = {"/schema-test.sql", "/db/s2-incremental.sql"})
@@ -272,7 +273,9 @@ class AccountLifecycleIntegrationTest {
                 .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
 
         String requestId = requestId();
-        mvc.perform(post("/api/v1/accounts").principal(CUSTOMER).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/v1/accounts")
+                        .header("Authorization", SessionVerifierTestConfiguration.LIFECYCLE_AUTHORIZATION)
+                        .contentType(MediaType.APPLICATION_JSON)
                         .header("X-Trace-Id", "lifecycle-contract")
                         .content("{\"currency\":\"CNY\",\"requestId\":\"" + requestId + "\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.code").value("SUCCEEDED"))
@@ -280,11 +283,14 @@ class AccountLifecycleIntegrationTest {
                 .andExpect(jsonPath("$.data.bookBalance").value("0.00"));
         String accountId = accounts.list(CUSTOMER, 1, 20).items().getFirst().accountId();
 
-        mvc.perform(post("/api/v1/accounts/{id}/limits", accountId).principal(CUSTOMER)
+        mvc.perform(post("/api/v1/accounts/{id}/limits", accountId)
+                        .header("Authorization", SessionVerifierTestConfiguration.LIFECYCLE_AUTHORIZATION)
                         .contentType(MediaType.APPLICATION_JSON).content("{\"personalSingleLimit\":100.00,"
                                 + "\"personalDailyLimit\":\"1000.00\",\"requestId\":\"" + requestId() + "\"}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
-        mvc.perform(post("/api/v1/accounts").principal(CUSTOMER).contentType(MediaType.APPLICATION_JSON)
+        mvc.perform(post("/api/v1/accounts")
+                        .header("Authorization", SessionVerifierTestConfiguration.LIFECYCLE_AUTHORIZATION)
+                        .contentType(MediaType.APPLICATION_JSON)
                         .header("X-Request-Id", requestId())
                         .content("{\"currency\":\"CNY\",\"requestId\":\"" + requestId + "\"}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
