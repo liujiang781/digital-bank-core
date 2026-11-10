@@ -1,6 +1,6 @@
 # backend · 数字银行后端
 
-实验三的 Java 17 / Spring Boot 轻量微服务骨架。父 POM 固定 Spring Boot 3.5.7、Spring Cloud 2025.0.0，Maven Wrapper 固定 Maven 3.9.11。
+实验三的 Java 21 / Spring Boot 轻量微服务骨架。父 POM 固定 Spring Boot 3.5.7、Spring Cloud 2025.0.0，Maven Wrapper 固定 Maven 3.9.11。
 版本兼容关系见 [Spring Cloud 官方说明](https://spring.io/projects/spring-cloud/)。
 
 ## 1. 结构与职责
@@ -28,7 +28,7 @@ backend/
 
 ## 2. 构建
 
-需要 JDK 17（先检查 `java -version` 和 `JAVA_HOME`）。在本目录执行：
+需要 JDK 21（先检查 `java -version` 和 `JAVA_HOME`）。在本目录执行：
 
 ```powershell
 .\mvnw.cmd clean install
@@ -36,7 +36,7 @@ backend/
 
 macOS/Linux 使用 `sh ./mvnw clean install`。首次执行需要联网下载 Maven 和依赖。
 先执行 `install`，保证随后单独启动服务时可以解析本项目的父 POM 和 `common`。
-IDE 中打开本目录 `pom.xml`，选择 JDK 17、Maven Wrapper 并重新加载 Maven。
+IDE 中打开本目录 `pom.xml`，选择 JDK 21、Maven Wrapper 并重新加载 Maven。
 
 若本机 Maven 的 `settings.xml` 配置了不可用镜像，可使用项目提供的官方仓库设置：
 

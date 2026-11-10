@@ -21,7 +21,7 @@ def get(port, path, trace=None):
 def main():
     java = shutil.which("java")
     if not java:
-        raise RuntimeError("Java 17+ is required")
+        raise RuntimeError("Java 21+ is required")
     jars = {m: ROOT / m / "target" / f"{m}-0.1.0-SNAPSHOT.jar" for m in MODULES}
     for module, jar in jars.items():
         if not jar.exists():
