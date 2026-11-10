@@ -3,6 +3,10 @@ package com.digitalbank.user;
 import com.digitalbank.common.api.ErrorCode;
 import com.digitalbank.common.exception.BizException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.BeforeEach;
+import com.digitalbank.user.service.SessionService;
+import com.digitalbank.user.dto.LoginRequest;
+import org.springframework.boot.test.context.TestComponent;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -16,11 +20,24 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 import static org.hamcrest.Matchers.*;
 
-@SpringBootTest
+@SpringBootTest(properties = {
+        "auth.demo.enabled=true",
+        "auth.demo.identity-id=infrastructure-user",
+        "auth.demo.password=infrastructure-test-password"
+})
 @AutoConfigureMockMvc
 @Import(InfrastructureTest.Endpoints.class)
 class InfrastructureTest {
     @Autowired MockMvc mvc;
+    @Autowired SessionService sessions;
+    private String bearer;
+
+    @BeforeEach
+    void login() {
+        var request = new LoginRequest(
+                "infrastructure-user", "infrastructure-test-password");
+        bearer = "Bearer " + sessions.login(request).token();
+    }
 
     @Test
     void traceSurvivesInHeaderAndBody() throws Exception {
@@ -40,7 +57,7 @@ class InfrastructureTest {
 
     @Test
     void businessErrorUsesContractStatus() throws Exception {
-        mvc.perform(get("/test/business-error"))
+        mvc.perform(get("/test/business-error").header("Authorization", bearer))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("REQUEST_CONFLICT"))
                 .andExpect(jsonPath("$.traceId").isNotEmpty());
@@ -48,7 +65,7 @@ class InfrastructureTest {
 
     @Test
     void unexpectedErrorDoesNotExposeDetails() throws Exception {
-        mvc.perform(get("/test/system-error"))
+        mvc.perform(get("/test/system-error").header("Authorization", bearer))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.code").value("INTERNAL_ERROR"))
                 .andExpect(content().string(not(containsString("private-detail"))));
@@ -56,12 +73,12 @@ class InfrastructureTest {
 
     @Test
     void missingRouteRemains404() throws Exception {
-        mvc.perform(get("/missing")).andExpect(status().isNotFound());
+        mvc.perform(get("/missing").header("Authorization", bearer)).andExpect(status().isNotFound());
     }
 
     @Test
     void wrongMethodRemains405() throws Exception {
-        mvc.perform(post("/api/v1/user/health"))
+        mvc.perform(post("/api/v1/user/health").header("Authorization", bearer))
                 .andExpect(status().isMethodNotAllowed());
     }
 
@@ -70,7 +87,7 @@ class InfrastructureTest {
         @Bean FailureController failureController() { return new FailureController(); }
     }
 
-    @org.springframework.boot.test.context.TestComponent
+    @TestComponent
     @RestController
     static class FailureController {
         @GetMapping("/test/business-error")
