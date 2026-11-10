@@ -16,3 +16,18 @@ management:
 logging:
   pattern:
     level: "%5p [traceId=%X{traceId:-}]"
+
+auth:
+  verification-mode: local
+  internal-token: ${BANK_INTERNAL_TOKEN:}
+  session-ttl: ${BANK_SESSION_TTL:30m}
+  max-sessions: ${BANK_MAX_SESSIONS:10000}
+  credential-store: ${BANK_CREDENTIAL_STORE:demo}
+  demo:
+    enabled: ${BANK_DEMO_ENABLED:false}
+    identity-id: ${BANK_DEMO_IDENTITY:demo-user}
+    password: ${BANK_DEMO_PASSWORD:}
+  database:
+    url: ${BANK_DB_URL:jdbc:mysql://localhost:3306/payment_db?serverTimezone=Asia/Shanghai&characterEncoding=UTF-8}
+    username: ${BANK_DB_USERNAME:bank_user}
+    password: ${BANK_DB_PASSWORD:}
