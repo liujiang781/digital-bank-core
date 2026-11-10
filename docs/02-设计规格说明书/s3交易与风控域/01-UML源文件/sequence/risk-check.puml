@@ -1,0 +1,66 @@
+@startuml risk-check-sequence
+' ============================================================
+' 图 2-9 风控拦截序列图（与 B 的类模型对齐，单页紧凑版）
+' 对应用例：UC-TR-03/04 出账前校验
+' 负责人：C（交易与风控域）
+' 说明：RiskRule/RiskEvent 采用 B 的字段；账户状态是内置规则 RK-01。
+' ============================================================
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 10
+skinparam shadowing false
+skinparam backgroundColor #FFFFFF
+skinparam ArrowColor #4A5568
+skinparam sequenceMessageAlign left
+skinparam responseMessageBelowArrow true
+skinparam sequenceGroupBodyPadding 1
+skinparam sequenceGroupHeaderPadding 1
+hide footbox
+
+title 图 2-9 风控拦截序列图（出账前）
+
+participant "TransferService" as TS
+participant "RiskCheckService" as RS
+participant "Account" as Acc
+participant "RiskRule" as Rule
+participant "RiskEvent" as Event
+database "MySQL" as DB
+
+note over TS : 前置：AccessService 权限（BR-20）、\n金额合法性（BR-01）、\nIdempotencyService 幂等（BR-11/12）
+
+TS -> RS : checkOutgoing(payer, payee, amount,\ntradeNo, identityId)
+RS -> Acc : getStatus(payer / payee)
+Acc -> DB : SELECT status
+DB --> Acc : status
+Acc --> RS : status
+
+RS -> Acc : snapshot(B / R / L1 / Ld / 当日已用)
+Acc -> DB : SELECT book_balance, reserved_amount,\npersonal_*_limit, 当日已用
+DB --> Acc : snapshot
+Acc --> RS : AccountSnapshot
+
+RS -> Rule : currentLimitPolicy()
+Rule -> DB : SELECT LIMIT_POLICY + rule_version
+DB --> Rule : rule
+Rule --> RS : rule
+
+RS -> Rule : evaluateOutgoing(amount, snapshot)
+Rule --> RS : PASS / REJECT(reasonCode)
+
+alt 状态非 NORMAL（BR-03）
+  RS -> Event : reject(RK-01, 1, ACCOUNT_STATUS)
+  Event -> DB : INSERT risk_event
+  RS --> TS : REJECT
+else 超单笔（BR-05/06）
+  RS -> Event : reject(ruleId, ruleVersion, SINGLE_LIMIT)
+  Event -> DB : INSERT risk_event
+  RS --> TS : REJECT
+else 超日累计（BR-05/07）
+  RS -> Event : reject(ruleId, ruleVersion, DAILY_LIMIT)
+  Event -> DB : INSERT risk_event
+  RS --> TS : REJECT
+else 全部通过
+  RS --> TS : PASS
+end
+
+note over TS : 拒绝：Transaction.markRejected()；\n不写 FundEntry、不占资金（BR-19）；\n只有 PASS 才进入 PostingService.reserve()
+@enduml
