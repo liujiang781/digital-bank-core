@@ -1,0 +1,236 @@
+@startuml deposit-request
+title 图 2-4（a）存款受理与渠道请求
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 14
+skinparam shadowing false
+skinparam backgroundColor white
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 220
+hide footbox
+autonumber
+
+actor "客户 ACT-C" as CustomerActor
+boundary "DepositForm" as Form
+boundary "DepositController" as Controller
+control "AccessService" as Access
+control "DepositService" as Deposit
+control "IdempotencyService" as Idempotency
+entity "Transaction" as Transaction
+entity "Account" as Account
+entity "RiskRule" as Rule
+boundary "ChannelGateway" as Gateway
+
+CustomerActor -> Form : submitDeposit(accountId,amount,CNY,requestId)
+Form -> Controller : deposit(request)
+Controller -> Access : authenticate()
+alt 未登录／会话失效
+  Access --> Controller : 401
+  Controller --> Form : 请登录；不受理、不调用渠道
+else 已认证
+  Access --> Controller : Identity（来自会话）
+  Controller -> Access : requireAccountAccess(identity,accountId,DEPOSIT)
+  Access -> Account : 检查 ACT-C 存款操作权及本人归属
+  alt 越权／授权内对象不存在
+    Access --> Controller : 403／404（不泄露他人信息）
+    Controller --> Form : 请求拒绝；B/R 不变
+  else 有权操作
+    Access --> Controller : 通过
+    Controller -> Deposit : deposit(identity,request)
+    Deposit -> Idempotency : claimOrLoad(identityId,DEPOSIT,requestId,payloadHash)
+    note over Deposit,Idempotency
+    设计约束：原子持久判定，不使用“先查再插”。
+    键作用域＝身份＋业务类型＋requestId；摘要覆盖账户、金额、币种。
+    规范化不四舍五入，非法小数精度仍须拒绝。
+    end note
+    note over Idempotency,Transaction
+    原子占位先落幂等／请求技术记录；它不是资金流水。
+    仅合法金额才能构造 Transaction.amount:Decimal。
+    已关联业务交易时才读取 Transaction 当前状态。
+    end note
+    alt 已有键，相同内容
+      alt 已关联合法金额业务交易
+        Idempotency -> Transaction : snapshot()
+        Transaction --> Idempotency : 原 tradeNo 与当前状态
+      else 原请求已有技术拒绝结果
+        note over Deposit,Idempotency
+        读取技术记录的原 REJECTED 结果；tradeNo 可空。
+        不调用 Transaction.snapshot()，不创建业务交易。
+        end note
+      else 原请求仍在占位／校验中
+        note over Deposit,Idempotency
+        返回 receiptId 与技术记录当前 RECEIVED／PROCESSING；tradeNo 可空。
+        由原唯一处理者继续，不补建交易、不调用渠道。
+        end note
+      end
+      Idempotency --> Deposit : EXISTING
+      Deposit --> Controller : 返回原结果／当前状态
+      note over Deposit,Account
+      不重新调用渠道，不再执行新请求冻结检查。
+      账户随后冻结也不能阻断冻结前已受理交易的查询和确认。
+      end note
+    else 已有键，不同内容
+      Idempotency --> Deposit : CONFLICT
+      Deposit --> Controller : 幂等内容冲突；资金不变
+    else 新请求唯一受理权
+      Idempotency --> Deposit : NEW（receiptId，唯一处理权）
+      alt 金额无法解析／非正／精度非法／币种非法
+        Deposit -> Idempotency : complete(REJECTED,reason)
+        note over Deposit,Transaction
+        原始非法输入及拒绝结果保存在请求技术记录，
+        不强行构造非法 Decimal，不生成 FundEntry。
+        end note
+        Deposit --> Controller : 拒绝；B/R 不变
+      else 金额格式与取值合法
+      Deposit -> Transaction : 创建合法金额交易（tradeNo，RECEIVED）
+      Deposit -> Account : assertCanAcceptNewDeposit()
+      Deposit -> Rule : validateDepositAmount(amount,currency)
+      note over Account,Rule
+      BR-01：CNY，金额>0，最多两位小数。
+      BR-03：仅正常账户接受新存款。
+      BR-05：存款独立单笔上限，课堂建议 50,000 元，可配置。
+      end note
+      alt 冻结／已注销／存款超限
+        Deposit -> Transaction : markRejected(reason)
+        Deposit --> Controller : 拒绝；B/R 不变，无 FundEntry
+      else 准入通过
+        group 受理提交：与账户冻结操作有同一串行点
+          Deposit -> Account : 重检状态及适用存款上限
+          alt 并发冻结先完成
+            Deposit -> Transaction : markRejected(ACCOUNT_FROZEN)
+          else 原子确立已受理交易
+            Deposit -> Transaction : markProcessing()，记录 acceptedAt
+          end
+        end
+        alt 未获得已受理状态
+          Deposit --> Controller : 拒绝；不请求渠道
+        else 已持久受理
+          Deposit -> Gateway : requestDeposit(tradeNo,accountId,amount,currency)
+          note over Deposit,Gateway
+          原 tradeNo 贯穿渠道与本地处理。
+          客户重试不产生第二次渠道业务；通道传输重试沿用同号。
+          崩溃恢复先查询原号；UNKNOWN／未找到不等同明确失败。
+          end note
+          Gateway --> Deposit : 明确成功／明确失败／未知（5 秒无明确结果）
+          ref over Deposit,Gateway
+          图 2-4（b）：结果验证、入账或待确认
+          end ref
+          Deposit --> Controller : 当前 tradeNo 与状态
+        end
+      end
+      end
+    end
+    Controller --> Form : 展示结果；仅 SUCCEEDED 显示已到账
+  end
+end
+@enduml
+
+@startuml deposit-confirmation
+title 图 2-4（b）渠道结果确认与一次性入账
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 14
+skinparam shadowing false
+skinparam backgroundColor white
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 220
+hide footbox
+autonumber
+
+actor "模拟资金渠道 ACT-F" as ChannelActor
+boundary "ChannelGateway" as Gateway
+control "DepositService" as Deposit
+control "PostingService" as Posting
+entity "Transaction" as Transaction
+entity "Account" as Account
+entity "FundEntry" as Entry
+
+note over Gateway,Deposit
+入口包括同步返回、自动核对、合法迟到回执。
+核对调用 queryAcceptedDeposit(tradeNo) 后以原号查询渠道。
+客户触发查询时先经 AccessService.requireAcceptedTradeAccess()；
+通道回执与后台核对使用各自服务身份，不依赖原客户会话。
+end note
+ChannelActor -> Gateway : 返回／推送渠道结果
+Gateway -> Deposit : confirmDeposit(tradeNo,result)
+Deposit -> Transaction : snapshot()
+Transaction --> Deposit : 已受理上下文／已有终态
+Deposit -> Gateway : verifyResult(transaction,result)
+Gateway --> Deposit : 来源、原号、账户、金额、币种是否匹配
+alt 无已受理交易／证据不匹配
+  note over Deposit,Transaction
+  拒绝据此结算，留审查记录；不改余额、不生成资金流水。
+  伪造结果不覆盖合法交易状态。
+  end note
+else 证据有效
+  Deposit -> Transaction : recordEvidence(result)
+  note over Deposit,Transaction
+  证据先持久留存；条件更新不能降级既有终态。
+  受理后即使账户冻结，仍继续原交易确认。
+  end note
+  alt UNKNOWN／超时，且交易未终结
+    Deposit -> Transaction : markPending()
+    Deposit --> Gateway : PENDING；B/R 不变
+    note over Gateway,Deposit
+    立即向原调用方返回待确认，本次请求至此结束。
+    后台核对在独立执行中进行，不阻塞这次响应。
+    end note
+  else 明确失败
+    Deposit -> Posting : recordFailure(tradeNo,proof)
+    Posting -> Transaction : 加锁读取当前状态
+    alt 尚未入账且无矛盾终态
+      Posting -> Transaction : markFailed()
+      Posting --> Deposit : FAILED；B/R 不变，无 FundEntry
+    else 已成功／矛盾终态
+      Posting --> Deposit : 保持原结果，矛盾证据转审查
+    end
+  else 明确成功
+    Deposit -> Posting : completeDeposit(tradeNo,result)
+    group 一致提交契约：同一资金边界内，按原号串行判定
+      Posting -> Transaction : 加锁读取状态及既有入账标识
+      alt 已 SUCCEEDED 且入账完整
+        Posting --> Deposit : 原成功结果（重复回执无第二次资金效果）
+      else FAILED／REJECTED 或证据矛盾
+        Posting --> Deposit : 保持原终态并转审查，不直接改余额
+      else 已受理、待完成的存款
+        Posting -> Account : credit(amount)
+        note right of Account
+        B := B + amount，R 不变。
+        不重做新请求 NORMAL 准入检查。
+        end note
+        Posting -> Entry : creditOf(tradeNo,accountId,amount)
+        note right of Entry
+        仅追加一条实际入账流水。
+        (tradeNo, accountId, entryRole) 唯一。
+        end note
+        Posting -> Transaction : markSucceeded()
+        alt 三项完整提交
+          Posting --> Deposit : SUCCEEDED
+        else 任一步失败／提交中断
+          note over Posting,Entry
+          整体回滚本次余额、流水和成功终态；不得单边提交。
+          保留已验证渠道证据，交易仍待完成，不报告最终失败。
+          重试同一入账，不重发渠道业务；核对后查询实际提交结果。
+          end note
+          Posting --> Deposit : 待确认／待完成
+        end
+      end
+    end
+  else UNKNOWN 且已终结
+    Deposit --> Gateway : 返回原终态，不降级、不改资金
+  end
+end
+== 独立后台时序：原请求已返回后的核对 ==
+opt 原交易仍待确认且具备服务／运营授权
+  Deposit -> Deposit : queryAcceptedDeposit(tradeNo)
+  Deposit -> Gateway : queryResult(tradeNo)
+  Gateway --> Deposit : 稳定结果／仍未知
+  ref over Deposit,Posting
+  有明确结果则重新进入本图确认流程；不创建新业务。
+  仍未知则保留待确认、继续调度或转运营待处理。
+  end ref
+end
+legend bottom
+一致提交是本地设计的业务约束；A 的架构实现须满足同等语义。
+不能把跨进程的三次远程写入标成一个已自动获得原子性的本地事务。
+失败、超时、拒绝及审查记录均不是 FundEntry。
+endlegend
+@enduml

@@ -1,0 +1,60 @@
+@startuml risk-match
+' ============================================================
+' 图 2-11 风控规则匹配活动图（与 B 的类模型对齐，单页紧凑版）
+' 对应用例：UC-TR-03/04 出账前风控
+' 负责人：C（交易与风控域）
+' 说明：RiskRule 使用 B 的 outgoingSingleLimit/outgoingDailyLimit；
+'       账户状态是内置规则 RK-01；核心 RiskDecision 仅 PASS/REJECT。
+' ============================================================
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 9
+skinparam shadowing false
+skinparam backgroundColor #FFFFFF
+skinparam ArrowColor #4A5568
+skinparam padding 0
+skinparam nodesep 6
+skinparam ranksep 8
+skinparam activity {
+  BackgroundColor #EBF4FF
+  BorderColor #4A90D9
+}
+skinparam activityDiamond {
+  BackgroundColor #FFF4E6
+  BorderColor #D97706
+}
+
+title 图 2-11 风控规则匹配活动图
+
+start
+:接收出账校验\n(payer, payee, amount, tradeNo);
+
+if (金额不合法？\nBR-01) then (是)
+  :返回 REJECT(INVALID_AMOUNT);\n不建 Transaction、不写 FundEntry;
+  stop
+endif
+
+if (payer/payee 状态非 NORMAL？\nBR-03) then (是)
+  :写 RiskEvent(RK-01, 1,\nACCOUNT_STATUS, REJECT);
+  :返回 REJECT;
+  stop
+endif
+if (amount > min(Rule.outgoingSingleLimit,\nAccount.personalSingleLimit)？\nBR-05/06) then (是)
+  :写 RiskEvent(ruleId, ruleVersion,\nSINGLE_LIMIT, REJECT);
+  :返回 REJECT;
+  stop
+endif
+
+if (当日已成功 + 已占用 + 本笔\n> min(Rule.outgoingDailyLimit,\nAccount.personalDailyLimit)？\nBR-05/07) then (是)
+  :写 RiskEvent(ruleId, ruleVersion,\nDAILY_LIMIT, REJECT);
+  :返回 REJECT;
+  stop
+endif
+
+:返回 PASS;
+stop
+
+note right
+  拒绝只写 RiskEvent；不写 FundEntry（BR-19）；P2 高频标记不在核心 RiskDecision 中。
+end note
+
+@enduml

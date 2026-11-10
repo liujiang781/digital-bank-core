@@ -1,0 +1,55 @@
+@startuml deposit-robustness
+!pragma layout smetana
+title 图 2-3 存款鲁棒图
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 15
+skinparam shadowing false
+skinparam backgroundColor white
+skinparam linetype ortho
+left to right direction
+
+actor "客户\nACT-C" as CustomerActor
+actor "模拟资金渠道\nACT-F" as ChannelActor
+boundary "DepositForm\n存款表单" as Form
+boundary "DepositController\n存款接口" as Controller
+boundary "ChannelGateway\n模拟渠道适配边界" as Gateway
+control "DepositService\n存款用例编排" as Deposit
+control "AccessService\n身份与对象权限" as Access
+control "IdempotencyService\n原子受理与重复判定" as Idempotency
+control "PostingService\n一致入账与确认" as Posting
+entity "Account\n账户状态与余额" as Account
+entity "Transaction\n请求与处理状态" as Transaction
+entity "FundEntry\n不可变资金流水" as FundEntry
+entity "RiskRule\n存款独立单笔上限" as RiskRule
+
+CustomerActor --> Form
+Form --> Controller : 提交请求／展示结果
+Controller --> Deposit : 调用用例
+Deposit --> Access : 身份、账户归属
+Access --> Account : 读取归属与授权对象
+Access --> Transaction : 读取既有交易所属身份
+Deposit --> Idempotency : claimOrLoad
+Idempotency --> Transaction : 唯一受理权／原结果
+Deposit --> Account : 新请求状态检查
+Deposit --> RiskRule : 金额与存款上限
+Deposit --> Gateway : 按原 tradeNo 请求／核对
+Gateway --> ChannelActor : 模拟入金与稳定结果查询
+Deposit --> Posting : 明确结果的一致提交
+Posting --> Account : 增加账面余额，R 不变
+Posting --> Transaction : 终态与重复确认判定
+Posting --> FundEntry : 追加实际入账记录
+
+note bottom of Posting
+余额变动、FundEntry、成功状态为同一业务提交。
+不允许界面／渠道直接改余额。
+end note
+note bottom of Deposit
+BR-03：冻结拒绝新存款；已受理交易继续确认。
+BR-11/12：相同请求返回原状态，不重复入账。
+BR-13/19：成功才入账；失败／未知不生成资金流水。
+end note
+legend bottom
+边界：界面、接口与外部通道；控制：组织用例与一致性；实体：业务状态。
+外部参与者不计入表 2-1 的设计类。全部类名与图 2-6、表 2-1 对应。
+endlegend
+@enduml
