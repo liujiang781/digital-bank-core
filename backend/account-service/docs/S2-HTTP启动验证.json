@@ -1,0 +1,21 @@
+{
+  "completedAt": "2026-11-10T15:18:18.3969277+08:00",
+  "database": "MySQL 8.4.13",
+  "jvmTimezone": "UTC",
+  "artifact": "account-service-0.1.0-SNAPSHOT.jar",
+  "result": "PASS",
+  "checks": [
+    "actuator database health",
+    "unauthenticated user rejected",
+    "missing internal token rejected",
+    "traceId propagation",
+    "account acceptance",
+    "UNKNOWN retained",
+    "SUCCESS posted",
+    "duplicate callback idempotent",
+    "B=100.00 R=0.00 A=100.00",
+    "one persisted fund entry",
+    "posting status query"
+  ],
+  "note": "Module HTTP verification with a seeded S3 transaction; S1/S3 live services are not part of this check"
+}
