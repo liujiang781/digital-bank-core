@@ -1,6 +1,17 @@
 server:
   port: ${SERVER_PORT:8083}
 spring:
+  datasource:
+    url: ${TRANSACTION_DB_URL:jdbc:mysql://localhost:3306/payment_db?serverTimezone=Asia/Shanghai&characterEncoding=utf8}
+    username: ${TRANSACTION_DB_USER:transaction_service}
+    password: ${TRANSACTION_DB_PASSWORD:}
+    hikari:
+      connection-init-sql: SET time_zone = '+08:00'
+      initialization-fail-timeout: -1
+      connection-timeout: 3000
+  sql:
+    init:
+      mode: never
   application:
     name: transaction-service
   jackson:
@@ -16,3 +27,21 @@ management:
 logging:
   pattern:
     level: "%5p [traceId=%X{traceId:-}]"
+transaction:
+  # 保护本服务内部端点（模拟渠道演示接口）；为空时关闭内部访问
+  internal-token: ${TRANSACTION_INTERNAL_TOKEN:}
+account:
+  base-url: ${ACCOUNT_SERVICE_URL:http://localhost:8082}
+  # 与 S2 共享的内部服务令牌
+  internal-token: ${ACCOUNT_INTERNAL_TOKEN:}
+risk:
+  base-url: ${RISK_SERVICE_URL:http://localhost:8084}
+  # 与 risk-service 共享的内部服务令牌
+  internal-token: ${RISK_INTERNAL_TOKEN:}
+mock-channel:
+  # 模拟渠道当前结果模式：SUCCESS / FAILED / UNKNOWN（UNKNOWN 模拟超时）
+  result: ${MOCK_CHANNEL_RESULT:SUCCESS}
+recovery:
+  # 非终态原单恢复扫描间隔（毫秒），与交接文档 10 秒一致
+  interval-millis: ${RECOVERY_INTERVAL_MILLIS:10000}
+  initial-delay-millis: ${RECOVERY_INITIAL_DELAY_MILLIS:10000}

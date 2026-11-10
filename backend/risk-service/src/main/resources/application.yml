@@ -1,6 +1,17 @@
 server:
   port: ${SERVER_PORT:8084}
 spring:
+  datasource:
+    url: ${RISK_DB_URL:jdbc:mysql://localhost:3306/payment_db?serverTimezone=Asia/Shanghai&characterEncoding=utf8}
+    username: ${RISK_DB_USER:risk_service}
+    password: ${RISK_DB_PASSWORD:}
+    hikari:
+      connection-init-sql: SET time_zone = '+08:00'
+      initialization-fail-timeout: -1
+      connection-timeout: 3000
+  sql:
+    init:
+      mode: never
   application:
     name: risk-service
   jackson:
@@ -16,3 +27,6 @@ management:
 logging:
   pattern:
     level: "%5p [traceId=%X{traceId:-}]"
+risk:
+  # 保护风控内部求值端点；为空时关闭内部访问
+  internal-token: ${RISK_INTERNAL_TOKEN:}
