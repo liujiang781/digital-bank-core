@@ -1,0 +1,17 @@
+account_id	book_balance	reserved_amount	available_balance	check_result
+ACC_S2_001	50000.00	0.00	50000.00	OK
+ACC_S2_002	30000.00	0.00	30000.00	OK
+table_count
+13
+fk_count
+15
+ERROR 1062 (23000) at line 29: Duplicate entry 'UID-000001-DEPOSIT-REQ-DEMO-0001' for key 'uk_transaction_request'
+account_id	balance_before
+ACC_S2_001	50000.00
+account_id	balance_after	increased_by
+ACC_S2_001	50100.00	100.00
+trade_no	entry_role	direction	amount
+VERIFY-DEPO-0001	DEPOSIT_IN	CREDIT	100.00
+flow_count
+1
+ERROR 1062 (23000) at line 78: Duplicate entry 'VERIFY-DEPO-0001-ACC_S2_001-DEPOSIT_IN' for key 'uk_transaction_flow_role'
