@@ -1,6 +1,6 @@
 <script setup>
 // 交易记录页（UC-TR-05 列表形态）
-// 非终态（PROCESSING/PENDING/RECOVERING）交易可点击"查询状态"触发渠道核对收敛。
+// 非终态（PROCESSING/UNKNOWN/RECOVERING）交易可点击"查询状态"触发渠道核对收敛。
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { listTransactions, getTransaction } from '../api/transaction'
@@ -18,7 +18,7 @@ const filters = reactive({ businessType: '', status: '' })
 const checking = reactive({})
 
 const statusOptions = [
-  'RECEIVED', 'REJECTED', 'PROCESSING', 'PENDING', 'SUCCEEDED', 'RECOVERING', 'FAILED'
+  'ACCEPTED', 'REJECTED', 'PROCESSING', 'UNKNOWN', 'SUCCESS', 'RECOVERING', 'FAILED'
 ]
 
 async function load() {
@@ -44,7 +44,7 @@ async function load() {
   }
 }
 
-// 查询最新状态：客户触发的查询还会发起一次渠道核对（帮助 PENDING/RECOVERING 收敛）
+// 查询最新状态：客户触发的查询还会发起一次渠道核对（帮助 UNKNOWN/RECOVERING 收敛）
 async function checkStatus(tradeNo) {
   checking[tradeNo] = true
   try {

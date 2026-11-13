@@ -106,7 +106,7 @@ onMounted(refresh)
             </div>
           </el-col>
         </el-row>
-        <div v-if="account" class="open-time">开户时间：{{ account.openedAt || '—' }}</div>
+        <div v-if="account" class="open-time">开户时间：{{ account.createdAt || '—' }}</div>
       </el-card>
 
       <!-- 资金流水 -->

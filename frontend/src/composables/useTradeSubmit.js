@@ -1,7 +1,7 @@
 // 交易受理提交 composable：统一处理 S5 验收三件事——
 // 1. 提交 loading / 结果提示（错误提示直接用后端 message）
 // 2. 网络失败后的重试复用原 requestId（幂等，不重复入账）
-// 3. 非终态（PROCESSING/PENDING/RECOVERING）交易按 tradeNo 查询收敛
+// 3. 非终态（PROCESSING/UNKNOWN/RECOVERING）交易按 tradeNo 查询收敛
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { isFinalStatus } from '../utils/status'
@@ -29,11 +29,19 @@ export function useTradeSubmit(submitFn, queryFn) {
     pollCount = 0
   }
 
+  // 提示规则：外壳 code=SUCCEEDED 只代表请求已处理（交接说明 2.2 节），
+  // 业务结果优先看 data.status（受理类接口）；无 status 的接口回退看 code。
   function notify(res) {
+    const status = res.data?.status
+    if (status) {
+      if (status === 'SUCCESS') ElMessage.success(res.message || '操作成功')
+      else if (['FAILED', 'REJECTED'].includes(status))
+        ElMessage.error(res.message || '操作失败')
+      else ElMessage.warning(res.message || '交易处理中，请稍后查询')
+      return
+    }
     if (res.code === 'SUCCEEDED') {
       ElMessage.success(res.message || '操作成功')
-    } else if (['PROCESSING', 'PENDING', 'RECOVERING', 'RECEIVED'].includes(res.code)) {
-      ElMessage.warning(res.message || '交易处理中，请稍后查询')
     } else {
       ElMessage.error(res.message || '操作失败')
     }

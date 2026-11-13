@@ -23,7 +23,7 @@ export function withdraw({ accountId, amount, currency = 'CNY', requestId }) {
  * 转账（UC-TR-03 本行 P0 / UC-TR-04 跨行 P0）
  * POST /api/v1/transfers
  * 本行：payerAccountId + payeeAccountId
- * 跨行：payerAccountId + externalBankCode + externalPayeeRef（PENDING 语义，BR-16/17）
+ * 跨行：payerAccountId + externalBankCode + externalPayeeRef（UNKNOWN 待确认语义，BR-16/17）
  */
 export function transfer({
   payerAccountId,
@@ -50,7 +50,7 @@ export function transfer({
 /**
  * 查询交易结果（UC-TR-05，P0）
  * GET /api/v1/transactions/{tradeNo}
- * 客户触发查询还会发起一次渠道核对（帮助 PENDING/RECOVERING 收敛）
+ * 客户触发查询还会发起一次渠道核对（帮助 UNKNOWN/RECOVERING 收敛）
  */
 export function getTransaction(tradeNo) {
   return http.get(`/transactions/${encodeURIComponent(tradeNo)}`)

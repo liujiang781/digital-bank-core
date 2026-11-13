@@ -33,9 +33,15 @@ mysql -u root -p payment_db < sql/verify.sql
 
 | 检查项 | 预期值 |
 |---|---|
+<<<<<<< Updated upstream
 | table_count | 13 |
 | fk_count | 15 |
 | ACC_S2_001 / ACC_S2_002 余额不变式 | 两个 OK |
+=======
+| table_count | 12 |
+| fk_count | 13 |
+| ACC-0001 / ACC-0002 余额不变式 | 两个 OK |
+>>>>>>> Stashed changes
 | 幂等键重复插入 | Duplicate entry（约束生效） |
 
 验证输出见 `验证输出.txt`。
@@ -44,8 +50,13 @@ mysql -u root -p payment_db < sql/verify.sql
 
 | 用户名 | 密码 | 账户 | 初始余额 |
 |---|---|---|---|
+<<<<<<< Updated upstream
 | zhangsan | demo123 | ACC_S2_001 | 50000.00 |
 | lisi | demo123 | ACC_S2_002 | 30000.00 |
+=======
+| zhangsan | demo123 | ACC-0001 | 50000.00 |
+| lisi | demo123 | ACC-0002 | 30000.00 |
+>>>>>>> Stashed changes
 | admin | admin123 | 运营（UC-TR-08/09） | — |
 
 ## 4. 关键约束
@@ -60,19 +71,28 @@ mysql -u root -p payment_db < sql/verify.sql
 | 给谁 | 内容 |
 |---|---|
 | S1 | DB_URL = `jdbc:mysql://localhost:3306/payment_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai` |
+<<<<<<< Updated upstream
 | S2/S3 | 13 张表结构见 `sql/schema.sql`；`transaction.status` 7 态、`business_type` 5 值见 DDL 注释 |
 | S3 | `mock_channel_deposit` 表已合入 schema.sql（S3 模拟渠道入金记录）；`risk_rule` 已预置 RK-02 LIMIT_POLICY（存款单笔 50000、出账单笔 10000、出账日累计 50000）；演示账户 `ACC_S2_001`/`ACC_S2_002` |
+=======
+| S2/S3 | 12 张表结构见 `sql/schema.sql`；`transaction.status` 7 态、`business_type` 5 值见 DDL 注释 |
+>>>>>>> Stashed changes
 | S5 | 演示账号见上方 |
 
 ## 6. 文件清单
 
 | 文件 | 作用 |
 |---|---|
+<<<<<<< Updated upstream
 | `sql/schema.sql` | 13 表 DDL，可重复执行 |
+=======
+| `sql/schema.sql` | 12 表 DDL，可重复执行 |
+>>>>>>> Stashed changes
 | `sql/init-data.sql` | 演示数据，幂等（INSERT IGNORE） |
 | `sql/verify.sql` | 验收脚本，幂等（先清 DEMO 数据再验证） |
 | `docker-compose.dev.yml` | MySQL 8 + Redis 7 本地开发环境 |
 | `.env.example` | 环境变量模板，复制为 `.env` |
+<<<<<<< Updated upstream
 
 ## 7. 数据库账号（S3 服务用）
 
@@ -103,3 +123,5 @@ FLUSH PRIVILEGES;
 ```
 
 > 本地联调也可以直接用 root：把各服务 `application.yml` 里的 `TRANSACTION_DB_USER`/`RISK_DB_USER` 改成 `root`，或通过环境变量覆盖。
+=======
+>>>>>>> Stashed changes

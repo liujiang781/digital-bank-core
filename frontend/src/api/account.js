@@ -48,9 +48,16 @@ export function freezeAccount(accountId, { reason, requestId }) {
 /**
  * 解冻账户（UC-AC-06，P0，运营授权）
  * POST /api/v1/accounts/{accountId}/unfreeze
+ * S2 实现口径：reason + releaseEvidence + resolvedRestrictionIds（须覆盖全部有效限制，
+ * 编号来自详情/冻结响应的 restrictions）
  */
-export function unfreezeAccount(accountId, { basis, requestId }) {
-  return http.post(`/accounts/${accountId}/unfreeze`, { basis, requestId })
+export function unfreezeAccount(accountId, { reason, releaseEvidence, resolvedRestrictionIds, requestId }) {
+  return http.post(`/accounts/${accountId}/unfreeze`, {
+    reason,
+    releaseEvidence,
+    resolvedRestrictionIds,
+    requestId
+  })
 }
 
 /**

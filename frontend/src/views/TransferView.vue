@@ -1,7 +1,7 @@
 <script setup>
 // 转账表单（UC-TR-03 本行 P0 / UC-TR-04 跨行 P0）
 // 本行：双方余额与流水在 account-service 同一本地事务提交（BR-15）。
-// 跨行：受理后进入 PENDING（外部结果待确认，BR-16/17），页面支持查询收敛。
+// 跨行：受理后进入 UNKNOWN 待确认（外部结果待确认，BR-16/17），页面支持查询收敛。
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { listAccounts } from '../api/account'
@@ -173,7 +173,6 @@ onMounted(async () => {
             title="跨行转账受理后为「待确认」状态，需等待外部渠道结果，可用「查询最新状态」收敛"
           />
         </template>
-
         <el-form-item label="转账金额" prop="amount">
           <el-input v-model="form.amount" placeholder="例如 100.00（两位小数）" style="width: 220px">
             <template #append>元</template>
