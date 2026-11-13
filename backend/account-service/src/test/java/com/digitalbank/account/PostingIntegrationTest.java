@@ -38,6 +38,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 /** Real local transactions against H2; MySQL runtime verification remains a separate check. */
 @SpringBootTest(properties = "account.internal-token=s2-test-service-token-32-bytes-long")
+@org.springframework.context.annotation.Import(SessionVerifierTestConfiguration.class)
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class PostingIntegrationTest {
@@ -449,7 +450,7 @@ class PostingIntegrationTest {
                         .content("{\"tradeNo\":\"not-executed\",\"accountId\":\"payer\",\"amount\":\"1.00\",\"currency\":\"CNY\"}"))
                 .andExpect(status().isUnauthorized()).andExpect(jsonPath("$.code").value("UNAUTHENTICATED"));
         mvc.perform(get("/api/v1/accounts/payee/balance")
-                        .principal(new Actor("identity-1", "customer-1", Set.of(), Set.of())))
+                        .header("Authorization", SessionVerifierTestConfiguration.POSTING_AUTHORIZATION))
                 .andExpect(status().isNotFound()).andExpect(jsonPath("$.code").value("ACCOUNT_NOT_FOUND"));
     }
 
@@ -468,7 +469,7 @@ class PostingIntegrationTest {
                                 + "\"observedAt\":\"not-a-time\"}"))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
         mvc.perform(get("/api/v1/accounts").param("page", "not-a-number")
-                        .principal(new Actor("identity-1", "customer-1", Set.of(), Set.of())))
+                        .header("Authorization", SessionVerifierTestConfiguration.POSTING_AUTHORIZATION))
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
     }
 

@@ -12,8 +12,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.security.Principal;
 import java.util.Collections;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -33,27 +35,45 @@ public final class AuthenticationFilter extends OncePerRequestFilter {
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {
-        String path = request.getRequestURI();
-        // 内部核验接口由 Controller 单独验证服务密钥，不能再递归核验自身。
+        String path = request.getRequestURI().substring(request.getContextPath().length());
+        // 内部接口由所属模块校验服务令牌，不要求调用方提供用户 Bearer 令牌。
         return AuthPaths.isPublic(request.getMethod(), path)
-                || "/internal/v1/auth/session".equals(path);
+                || path.startsWith("/internal/v1/");
     }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
             FilterChain chain) throws ServletException, IOException {
+        SessionIdentity identity;
         try {
             String token = AuthTokens.requireBearer(
                     Collections.list(request.getHeaders(HttpHeaders.AUTHORIZATION)));
             String traceId = (String) request.getAttribute(TraceIds.MDC_KEY);
-            SessionIdentity identity = verifier.verify(token, traceId);
+            identity = verifier.verify(token, traceId);
             request.setAttribute(AccessService.IDENTITY_ATTRIBUTE, identity);
         } catch (BizException ex) {
             writeFailure(request, response, ex);
             return;
         }
         // 业务异常由 ControllerAdvice 处理，避免吞掉业务层错误。
-        chain.doFilter(request, response);
+        Principal principal = identity::identityId;
+        chain.doFilter(new HttpServletRequestWrapper(request) {
+            @Override
+            public Principal getUserPrincipal() {
+                return principal;
+            }
+
+            @Override
+            public String getRemoteUser() {
+                return principal.getName();
+            }
+
+            @Override
+            public boolean isUserInRole(String role) {
+                // 会话尚不包含可信角色，不继承其他身份的角色或客户端身份头。
+                return false;
+            }
+        }, response);
     }
 
     private void writeFailure(HttpServletRequest request, HttpServletResponse response,
