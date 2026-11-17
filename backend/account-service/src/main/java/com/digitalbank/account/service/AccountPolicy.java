@@ -37,7 +37,7 @@ public class AccountPolicy {
         var start = day.atStartOfDay();
         var end = day.plusDays(1).atStartOfDay();
         BigDecimal successful = jdbc.queryForObject("SELECT COALESCE(SUM(amount), 0) FROM `transaction` "
-                        + "WHERE account_id = ? AND business_type IN ('WITHDRAWAL', 'INTERNAL_TRANSFER') "
+                        + "WHERE account_id = ? AND business_type IN ('WITHDRAWAL', 'INTERNAL_TRANSFER', 'EXTERNAL_TRANSFER') "
                         + "AND status = 'SUCCESS' AND accepted_at >= ? AND accepted_at < ?",
                 BigDecimal.class, accountId, start, end);
         BigDecimal reserved = jdbc.queryForObject("SELECT COALESCE(SUM(r.amount), 0) FROM account_reservation r "

@@ -2,6 +2,7 @@ package com.digitalbank.account.controller;
 
 import com.digitalbank.account.dto.PostingDtos.Command;
 import com.digitalbank.account.dto.PostingDtos.DepositResult;
+import com.digitalbank.account.dto.PostingDtos.ExternalTransferResult;
 import com.digitalbank.account.dto.PostingDtos.Failure;
 import com.digitalbank.account.dto.PostingDtos.Outcome;
 import com.digitalbank.account.dto.PostingDtos.Release;
@@ -57,6 +58,18 @@ public class PostingController {
     public ApiResponse<Outcome> transfer(@RequestBody Command command, HttpServletRequest request) {
         access.require(request);
         return response(service.postInternalTransfer(command), request);
+    }
+
+    @PostMapping("/external-transfer-results")
+    public ApiResponse<Outcome> externalTransferResult(@RequestBody ExternalTransferResult receipt,
+            HttpServletRequest request) {
+        access.require(request);
+        // Persist the channel decision before attempting the local posting in a separate transaction.
+        Outcome outcome = service.recordExternalTransferResult(receipt);
+        if (!"UNKNOWN".equals(receipt.result()) && !receipt.result().equals(outcome.status())) {
+            outcome = service.finishExternalTransfer(receipt.tradeNo());
+        }
+        return response(outcome, request);
     }
 
     @PostMapping("/releases")

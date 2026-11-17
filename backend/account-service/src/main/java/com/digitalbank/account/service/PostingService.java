@@ -7,6 +7,7 @@ import com.digitalbank.common.api.ErrorCode;
 import com.digitalbank.common.exception.BizException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
@@ -24,7 +25,8 @@ import org.springframework.transaction.annotation.Isolation;
 @Transactional(isolation = Isolation.READ_COMMITTED, noRollbackFor = PostingService.AuditedConflict.class)
 public class PostingService {
     private static final Set<String> TERMINAL = Set.of("SUCCESS", "FAILED", "REJECTED");
-    private static final Set<String> OUTGOING = Set.of("WITHDRAWAL", "INTERNAL_TRANSFER");
+    private static final String EXTERNAL_TRANSFER = "EXTERNAL_TRANSFER";
+    private static final Set<String> LOCAL_OUTGOING = Set.of("WITHDRAWAL", "INTERNAL_TRANSFER");
     private static final BigDecimal MAX_MONEY = new BigDecimal("9999999999999999.99");
     private final JdbcTemplate jdbc;
     private final AccountPolicy policy;
@@ -57,7 +59,8 @@ public class PostingService {
     }
 
     public Outcome depositResult(DepositResult receipt) {
-        validateReceipt(receipt);
+        validateReceipt(receipt.tradeNo(), receipt.result(), receipt.channelRequestId(), receipt.evidenceId(),
+                receipt.observedAt(), receipt.reasonCode());
         Trade trade = trade(receipt.tradeNo(), true);
         match(trade, "DEPOSIT", receipt.accountId(), receipt.amount(), receipt.currency());
         if (TERMINAL.contains(trade.status())) {
@@ -93,7 +96,16 @@ public class PostingService {
 
     public Outcome reserve(Command command) {
         Trade trade = trade(command.tradeNo(), true);
-        outgoing(trade, command);
+        boolean external = EXTERNAL_TRANSFER.equals(trade.type());
+        if (!external && !LOCAL_OUTGOING.contains(trade.type())) {
+            throw conflicting("预留仅用于取款、本行转账和跨行转账");
+        }
+        match(trade, trade.type(), command.payerAccountId(), command.amount(), command.currency());
+        String clearingStatus = null;
+        if (external) {
+            if (command.payeeAccountId() != null) throw invalid("跨行转账不能指定本行收款账户");
+            clearingStatus = lockExternalTransferOrder(trade);
+        }
         Transfer transfer = transfer(trade, command.payeeAccountId());
         if (TERMINAL.contains(trade.status())) return result(trade);
         Reservation existing = reservation(trade.tradeNo());
@@ -102,6 +114,9 @@ public class PostingService {
             return result(trade);
         }
         if (!"ACCEPTED".equals(trade.status())) throw conflicting("当前交易不允许首次预留");
+        if (external && !"SUBMITTED".equals(clearingStatus)) {
+            throw conflicting("首次预留要求跨行转账单处于 SUBMITTED");
+        }
         Map<String, Account> accounts = lockAccounts(trade.accountId(), transfer == null ? null : transfer.payee());
         Account payer = accounts.get(trade.accountId());
         owner(trade.identityId(), payer);
@@ -157,9 +172,72 @@ public class PostingService {
         return fresh(trade.tradeNo());
     }
 
+    public Outcome recordExternalTransferResult(ExternalTransferResult receipt) {
+        validateReceipt(receipt.tradeNo(), receipt.result(), receipt.channelRequestId(), receipt.evidenceId(),
+                receipt.observedAt(), receipt.reasonCode());
+        if ("SUCCESS".equals(receipt.result()) && receipt.reasonCode() != null) {
+            throw invalid("跨行成功回执不能包含 reasonCode");
+        }
+        Trade trade = trade(receipt.tradeNo(), true);
+        match(trade, EXTERNAL_TRANSFER, receipt.payerAccountId(), receipt.amount(), receipt.currency());
+        String clearingStatus = lockExternalTransferOrder(trade);
+        boolean unknown = "UNKNOWN".equals(receipt.result());
+        if (TERMINAL.contains(trade.status()) || "RECOVERING".equals(trade.status())
+                || "SUCCESS".equals(trade.channelResult()) || "FAILED".equals(trade.channelResult())) {
+            if (unknown || (receipt.result().equals(trade.channelResult())
+                    && Objects.equals(receipt.evidenceId(), trade.evidence())
+                    && Objects.equals(receipt.reasonCode(), trade.reason()))) {
+                return result(trade);
+            }
+            throw conflict(trade, "跨行渠道回执与已登记的明确结果不一致");
+        }
+        requireReservation(trade);
+        LocalDateTime observedAt = receipt.observedAt().toLocalDateTime();
+        if (unknown) {
+            jdbc.update("UPDATE `transaction` SET status = 'UNKNOWN', last_channel_result = 'UNKNOWN', "
+                            + "last_checked_at = ?, failure_reason = ?, version = version + 1 WHERE trade_no = ? "
+                            + "AND (last_checked_at IS NULL OR last_checked_at < ?)",
+                    observedAt, receipt.reasonCode(), trade.tradeNo(), observedAt);
+            if (!"UNKNOWN".equals(clearingStatus)) updateClearingStatus(trade, "UNKNOWN");
+        } else {
+            boolean success = "SUCCESS".equals(receipt.result());
+            jdbc.update("UPDATE `transaction` SET status = ?, last_channel_result = ?, "
+                            + "last_checked_at = ?, channel_evidence_id = ?, failure_reason = ?, "
+                            + "version = version + 1 WHERE trade_no = ?",
+                    success ? trade.status() : "RECOVERING", receipt.result(), observedAt, receipt.evidenceId(),
+                    receipt.reasonCode(), trade.tradeNo());
+            updateClearingStatus(trade, success ? "CONFIRMED_SUCCESS" : "CONFIRMED_FAILURE");
+        }
+        return fresh(trade.tradeNo());
+    }
+
+    public Outcome finishExternalTransfer(String tradeNo) {
+        Trade trade = trade(tradeNo, true);
+        if (!EXTERNAL_TRANSFER.equals(trade.type())) throw conflicting("原单不是跨行转账");
+        if (TERMINAL.contains(trade.status())) return result(trade);
+        if (trade.acceptedAt() == null || trade.evidence() == null) {
+            throw conflicting("跨行转账尚无已登记的明确结果");
+        }
+        if ("SUCCESS".equals(trade.channelResult())) {
+            Reservation reserved = requireReservation(trade);
+            Account payer = account(trade.accountId(), true);
+            debit(trade, payer, reserved);
+            flow(trade, payer.accountId(), "TRANSFER_OUT", "DEBIT", payer.bookBalance().subtract(trade.amount()));
+            consumed(trade);
+        } else if ("FAILED".equals(trade.channelResult()) && "RECOVERING".equals(trade.status())) {
+            releaseReservation(trade, requireActiveReservation(trade));
+            jdbc.update("UPDATE `transaction` SET status = 'FAILED', completed_at = CURRENT_TIMESTAMP, "
+                    + "version = version + 1 WHERE trade_no = ?", trade.tradeNo());
+            audit(trade, "POSTING_FAILURE", trade.reason());
+        } else {
+            throw conflicting("跨行转账尚无已登记的明确结果");
+        }
+        return fresh(trade.tradeNo());
+    }
+
     public Outcome release(Release command) {
         Trade trade = trade(command.tradeNo(), true);
-        if (!OUTGOING.contains(trade.type())) throw conflicting("释放仅适用于本轮出账业务");
+        if (!LOCAL_OUTGOING.contains(trade.type())) throw conflicting("本地失败释放仅适用于取款和本行转账");
         match(trade, trade.type(), command.payerAccountId(), command.amount(), command.currency());
         return failure(trade, new Failure(command.tradeNo(), "FAILED", command.reasonCode(),
                 command.evidenceType(), command.evidenceId()));
@@ -177,9 +255,12 @@ public class PostingService {
     @Transactional(readOnly = true, isolation = Isolation.REPEATABLE_READ)
     public Snapshot snapshot(SnapshotRequest request) {
         text(request.identityId(), 64, "identityId");
-        if (!Set.of("DEPOSIT", "WITHDRAWAL", "INTERNAL_TRANSFER").contains(
-                Objects.toString(request.businessType(), ""))) throw invalid("不支持的业务类型");
         boolean deposit = "DEPOSIT".equals(request.businessType());
+        boolean external = EXTERNAL_TRANSFER.equals(request.businessType());
+        if (!deposit && !external && !LOCAL_OUTGOING.contains(Objects.toString(request.businessType(), ""))) {
+            throw invalid("不支持的业务类型");
+        }
+        if (external && request.payeeAccountId() != null) throw invalid("跨行转账不能指定本行收款账户");
         Account payer = account(deposit ? request.accountId() : request.payerAccountId(), false);
         owner(request.identityId(), payer);
         var limits = policy.limits();
@@ -216,7 +297,8 @@ public class PostingService {
             if (!"FAILED".equals(command.decision()) || !"LOCAL_FAILURE".equals(command.evidenceType())) {
                 throw invalid("仅接受 REJECTED 风险拒绝或 FAILED 本地明确失败");
             }
-            if (!OUTGOING.contains(trade.type())) throw invalid("存款渠道结果必须使用 deposit-results");
+            if (EXTERNAL_TRANSFER.equals(trade.type())) throw invalid("跨行结果必须使用 external-transfer-results");
+            if (!LOCAL_OUTGOING.contains(trade.type())) throw invalid("存款渠道结果必须使用 deposit-results");
             if (uncertain(command.reasonCode())) {
                 throw invalid("超时或未知不能作为释放和失败依据");
             }
@@ -239,16 +321,7 @@ public class PostingService {
             if (reservation == null) {
                 if (!"ACCEPTED".equals(trade.status())) throw conflicting("受理后的失败缺少逐笔预留记录");
             } else {
-                matchReservation(trade, reservation);
-                if (!"RESERVED".equals(reservation.status())) throw conflicting("预留已被消耗或释放");
-                Account payer = account(trade.accountId(), true);
-                if (payer.reservedAmount().compareTo(reservation.amount()) < 0) {
-                    throw new IllegalStateException("Reservation exceeds account reserved balance");
-                }
-                jdbc.update("UPDATE account SET reserved_amount = reserved_amount - ?, version = version + 1 "
-                        + "WHERE account_id = ?", reservation.amount(), payer.accountId());
-                jdbc.update("UPDATE account_reservation SET status = 'RELEASED', updated_at = CURRENT_TIMESTAMP "
-                        + "WHERE trade_no = ?", trade.tradeNo());
+                releaseReservation(trade, reservation);
             }
         }
         jdbc.update("UPDATE `transaction` SET status = ?, failure_reason = ?, channel_evidence_id = ?, "
@@ -259,26 +332,22 @@ public class PostingService {
         return fresh(trade.tradeNo());
     }
 
-    private void validateReceipt(DepositResult receipt) {
-        text(receipt.tradeNo(), 32, "tradeNo");
-        if (!Set.of("SUCCESS", "FAILED", "UNKNOWN").contains(Objects.toString(receipt.result(), ""))) {
+    private void validateReceipt(String tradeNo, String result, String channelRequestId, String evidenceId,
+            OffsetDateTime observedAt, String reasonCode) {
+        text(tradeNo, 32, "tradeNo");
+        if (!Set.of("SUCCESS", "FAILED", "UNKNOWN").contains(Objects.toString(result, ""))) {
             throw invalid("渠道结果只能为 SUCCESS/FAILED/UNKNOWN");
         }
-        if (!("CHD" + receipt.tradeNo()).equals(receipt.channelRequestId())) throw conflicting("渠道请求号与交易号不匹配");
-        if (receipt.observedAt() == null || !ZoneOffset.ofHours(8).equals(receipt.observedAt().getOffset())) {
+        if (!("CHD" + tradeNo).equals(channelRequestId)) throw conflicting("渠道请求号与交易号不匹配");
+        if (observedAt == null || !ZoneOffset.ofHours(8).equals(observedAt.getOffset())) {
             throw invalid("observedAt 必须为东八区时间");
         }
-        if (!"UNKNOWN".equals(receipt.result())) text(receipt.evidenceId(), 64, "evidenceId");
-        if (receipt.evidenceId() != null && receipt.evidenceId().length() > 64) throw invalid("evidenceId 过长");
-        reasonCode(receipt.reasonCode(), "FAILED".equals(receipt.result()));
-        if ("FAILED".equals(receipt.result()) && uncertain(receipt.reasonCode())) {
+        if (!"UNKNOWN".equals(result)) text(evidenceId, 64, "evidenceId");
+        if (evidenceId != null && evidenceId.length() > 64) throw invalid("evidenceId 过长");
+        reasonCode(reasonCode, "FAILED".equals(result));
+        if ("FAILED".equals(result) && uncertain(reasonCode)) {
             throw invalid("超时或未知结果不能作为明确失败回执");
         }
-    }
-
-    private void outgoing(Trade trade, Command command) {
-        if (!OUTGOING.contains(trade.type())) throw conflicting("本轮预留仅用于取款和本行转账");
-        match(trade, trade.type(), command.payerAccountId(), command.amount(), command.currency());
     }
 
     private void match(Trade trade, String type, String accountId, String amount, String currency) {
@@ -308,6 +377,32 @@ public class PostingService {
         return transfer;
     }
 
+    private String lockExternalTransferOrder(Trade trade) {
+        var rows = jdbc.query("SELECT transfer_type, payer_account_id, payee_account_id, external_bank_code, "
+                        + "external_payee_ref, amount, currency, clearing_status "
+                        + "FROM transfer_order WHERE trade_no = ? FOR UPDATE",
+                (rs, n) -> {
+                    String bank = rs.getString("external_bank_code");
+                    String payeeRef = rs.getString("external_payee_ref");
+                    if (!"EXTERNAL".equals(rs.getString("transfer_type"))
+                            || !trade.accountId().equals(rs.getString("payer_account_id"))
+                            || rs.getString("payee_account_id") != null
+                            || bank == null || bank.isBlank() || payeeRef == null || payeeRef.isBlank()
+                            || trade.amount().compareTo(rs.getBigDecimal("amount")) != 0
+                            || !trade.currency().equals(rs.getString("currency"))) {
+                        throw conflicting("跨行转账单的类型、付款账户、外部收款方、金额或币种与要求不符");
+                    }
+                    return rs.getString("clearing_status");
+                }, trade.tradeNo());
+        if (rows.isEmpty()) throw conflicting("缺少原跨行转账单");
+        return rows.getFirst();
+    }
+
+    private void updateClearingStatus(Trade trade, String status) {
+        jdbc.update("UPDATE transfer_order SET clearing_status = ?, version = version + 1 WHERE trade_no = ?",
+                status, trade.tradeNo());
+    }
+
     private Map<String, Account> lockAccounts(String payer, String payee) {
         var ids = payee == null ? List.of(payer) : List.of(payer, payee).stream().distinct().sorted().toList();
         Map<String, Account> result = new HashMap<>();
@@ -332,12 +427,14 @@ public class PostingService {
     private Trade trade(String tradeNo, boolean lock) {
         text(tradeNo, 32, "tradeNo");
         var rows = jdbc.query("SELECT trade_no, identity_id, business_type, account_id, amount, currency, status, "
-                        + "accepted_at, channel_evidence_id, failure_reason FROM `transaction` WHERE trade_no = ?"
+                        + "accepted_at, channel_evidence_id, last_channel_result, failure_reason "
+                        + "FROM `transaction` WHERE trade_no = ?"
                         + (lock ? " FOR UPDATE" : ""), (rs, n) -> {
                     return new Trade(rs.getString("trade_no"), rs.getString("identity_id"), rs.getString("business_type"),
                             rs.getString("account_id"), rs.getBigDecimal("amount"), rs.getString("currency"),
                             rs.getString("status"), rs.getObject("accepted_at", LocalDateTime.class),
-                            rs.getString("channel_evidence_id"), rs.getString("failure_reason"));
+                            rs.getString("channel_evidence_id"), rs.getString("last_channel_result"),
+                            rs.getString("failure_reason"));
                 }, tradeNo);
         if (rows.isEmpty()) throw new BizException(ErrorCode.TRADE_NOT_FOUND, "原交易不存在");
         return rows.getFirst();
@@ -351,6 +448,10 @@ public class PostingService {
 
     private Reservation requireReservation(Trade trade) {
         requireAccepted(trade);
+        return requireActiveReservation(trade);
+    }
+
+    private Reservation requireActiveReservation(Trade trade) {
         Reservation reservation = reservation(trade.tradeNo());
         if (reservation == null || !"RESERVED".equals(reservation.status())) throw conflicting("提交前必须存在原交易预留");
         matchReservation(trade, reservation);
@@ -376,6 +477,19 @@ public class PostingService {
         }
         jdbc.update("UPDATE account SET book_balance = book_balance - ?, reserved_amount = reserved_amount - ?, "
                         + "version = version + 1 WHERE account_id = ?", trade.amount(), reservation.amount(), account.accountId());
+    }
+
+    private void releaseReservation(Trade trade, Reservation reservation) {
+        matchReservation(trade, reservation);
+        if (!"RESERVED".equals(reservation.status())) throw conflicting("预留已被消耗或释放");
+        Account payer = account(trade.accountId(), true);
+        if (payer.reservedAmount().compareTo(reservation.amount()) < 0) {
+            throw new IllegalStateException("Reservation exceeds account reserved balance");
+        }
+        jdbc.update("UPDATE account SET reserved_amount = reserved_amount - ?, version = version + 1 "
+                + "WHERE account_id = ?", reservation.amount(), payer.accountId());
+        jdbc.update("UPDATE account_reservation SET status = 'RELEASED', updated_at = CURRENT_TIMESTAMP "
+                + "WHERE trade_no = ?", trade.tradeNo());
     }
 
     private void consumed(Trade trade) {
@@ -453,7 +567,8 @@ public class PostingService {
     }
 
     private record Trade(String tradeNo, String identityId, String type, String accountId, BigDecimal amount,
-            String currency, String status, LocalDateTime acceptedAt, String evidence, String reason) { }
+            String currency, String status, LocalDateTime acceptedAt, String evidence, String channelResult,
+            String reason) { }
     private record Reservation(String accountId, BigDecimal amount, String status) { }
     private record Transfer(String payer, String payee, BigDecimal amount, String currency, String type) { }
 }
