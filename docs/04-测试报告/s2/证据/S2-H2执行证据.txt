@@ -1,0 +1,96 @@
+S2 实验四 H2 回归执行证据
+生产源码基线 1a89c0b57a40a9a88bbee27d69d89b4fbc41f389 + 本次 S2 测试改动
+测试环境 Windows 11、JDK 21.0.9、Maven 3.9.11、H2 2.3.232（MySQL 兼容模式）
+执行人 Codex（S2 本地自动化执行）
+
+从 backend 目录执行的 Maven 命令（mvn 为已有 Wrapper 下载的 3.9.11）
+mvn -B -o -s .mvn/central-settings.xml "-Dmaven.repo.local=D:/software engineering/tmp/s2-maven/repository" -Dsurefire.timeout=75 -pl account-service -am -l s2-h2-regression.log test
+
+Maven 日志摘要
+[INFO] Tests run: 11, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.397 s -- in com.digitalbank.common.web.AuthenticationFilterTest
+[INFO] Tests run: 11, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Tests run: 17, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 5.194 s -- in com.digitalbank.account.AccountLifecycleIntegrationTest
+[INFO] Tests run: 25, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.005 s -- in com.digitalbank.account.PostingIntegrationTest
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.028 s -- in com.digitalbank.account.security.SecurityBoundaryTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.005 s -- in com.digitalbank.account.support.InputContractTest
+[INFO] Tests run: 52, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
+[INFO] Finished at: 2026-11-17T14:20:33+08:00
+
+Surefire XML 测试实例（保留参数索引和耗时）
+
+com.digitalbank.common.web.AuthenticationFilterTest · 11 项
+PASS rejectedSessionCannotSupplyPrincipal [0.28s]
+PASS internalPathsAlsoWorkUnderServletContext [0.003s]
+PASS internalRequestsReachModuleServiceAuthenticationWithoutUserToken(String)[1] [0.013s]
+PASS internalRequestsReachModuleServiceAuthenticationWithoutUserToken(String)[2] [0.001s]
+PASS internalRequestsReachModuleServiceAuthenticationWithoutUserToken(String)[3] [0.002s]
+PASS internalRequestsReachModuleServiceAuthenticationWithoutUserToken(String)[4] [0.001s]
+PASS missingUserTokenCannotBypassAuthentication(String)[1] [0.002s]
+PASS missingUserTokenCannotBypassAuthentication(String)[2] [0.002s]
+PASS missingUserTokenCannotBypassAuthentication(String)[3] [0.004s]
+PASS downstreamBusinessErrorsAreNotRewrittenAsAuthenticationErrors [0.009s]
+PASS verifiedSessionSuppliesPrincipalAndPreservesS1IdentityAttribute [0.013s]
+
+com.digitalbank.account.AccountLifecycleIntegrationTest · 17 项
+PASS publicEndpointsRejectUnverifiedIdentityHeadersAndInvalidRequestContracts [0.926s]
+PASS repeatedOpenReturnsOneOriginalAccountAndOneSuccessfulTransaction [0.066s]
+PASS zeroBalancesDoNotPermitClosingAnAccountWithAnUnresolvedDeposit(String)[1] [0.068s]
+PASS zeroBalancesDoNotPermitClosingAnAccountWithAnUnresolvedDeposit(String)[2] [0.032s]
+PASS zeroBalancesDoNotPermitClosingAnAccountWithAnUnresolvedDeposit(String)[3] [0.031s]
+PASS zeroBalancesDoNotPermitClosingAnAccountWithAnUnresolvedDeposit(String)[4] [0.029s]
+PASS nonzeroBookBalancePreventsClosingWithOrWithoutReservedFunds(String)[1] [0.035s]
+PASS nonzeroBookBalancePreventsClosingWithOrWithoutReservedFunds(String)[2] [0.029s]
+PASS closingAlsoChecksPendingIncomingTransfers [0.054s]
+PASS authorizationIsRecheckedBeforeReturningAnIdempotentResult [0.061s]
+PASS concurrentOpenRequestsCannotExceedThreeIncludingFrozenAccounts [0.059s]
+PASS concurrentRetriesOfOneOpenRequestCreateOneAccount [0.045s]
+PASS allRestrictionsMustBeResolvedAndReplayingAnOldFreezeDoesNotRefreeze [0.074s]
+PASS balanceIsDerivedFromTheSameStoredSnapshotAndListRespectsScopes [0.036s]
+PASS latestEnabledPolicyControlsPersonalLimitsAndInvalidUpdatesLeaveThemUnchanged [0.032s]
+PASS auditFailureRollsBackTheStatusLogAndCommandClaim [0.032s]
+PASS closedAccountsRemainQueryableAndNoLongerCountTowardTheOpenLimit [0.034s]
+
+com.digitalbank.account.PostingIntegrationTest · 25 项
+PASS recoveringOutgoingTradesRejectLateSuccessAndRetainTheirReservations [0.025s]
+PASS releasingOneTradeCannotConsumeAnotherTradesReservation [0.017s]
+PASS freezeBeforeAcceptancePersistsRejectionWhileFreezeAfterAcceptanceAllowsConfirmation [0.01s]
+PASS acceptingASuccessfulDepositReturnsTheExistingOutcomeWithoutPostingAgain [0.011s]
+PASS internalSnapshotsCheckIdentityAndDoNotExposePayeeBalances [0.028s]
+PASS reserveAndWithdrawalSubmissionAreIndividuallyIdempotent [0.009s]
+PASS depositAcceptanceAppliesTheEffectiveSingleLimit(String, String, String)[1] [0.006s]
+PASS depositAcceptanceAppliesTheEffectiveSingleLimit(String, String, String)[2] [0.01s]
+PASS httpBoundariesRejectForgedIdentityAndMissingInternalToken [0.013s]
+PASS depositEvidenceMustMatchAcceptedTradeAndCannotFlipFinalResult [0.007s]
+PASS acceptedRiskPassCannotBeReusedAsARejectionAndDepositFailureCannotBypassChannelResult [0.005s]
+PASS riskRejectionRequiresMatchingPersistentEvidenceAndPersistsTerminalState [0.006s]
+PASS localFailureCannotBeUsedToTurnUnknownDepositIntoFailure [0.006s]
+PASS unknownDepositCanLaterSucceedAndLateUnknownCannotEraseTerminalEvidence [0.007s]
+PASS repeatedAndConcurrentSuccessfulDepositHasOneMoneyEffect [0.015s]
+PASS lateOutgoingCompletionBelongsToOriginalAcceptanceDay [0.013s]
+PASS concurrentReservationsCannotBothPassDailyLimitFromAnOldSnapshot [0.012s]
+PASS transferFailureAtSecondFlowRollsBackBothAccountsAndCanBeSafelyRetried [0.015s]
+PASS lowercaseTimeoutReasonCannotReleaseAReservedWithdrawal [0.01s]
+PASS aNonemptyEvidenceIdCannotMakeAChannelTimeoutAnExplicitDepositFailure [0.006s]
+PASS aReceiptCannotSkipAccountAcceptanceAndAWithdrawalCannotSkipReservation [0.005s]
+PASS explicitDepositFailureHasNoBalanceOrFlowAndCannotLaterCreditMoney [0.008s]
+PASS httpTypeErrorsReturn400InsteadOfCoercingMoneyOrReturning500 [0.02s]
+PASS replayStillChecksOriginalAmountAndTransferPayee [0.009s]
+PASS recoveringFailureMustReuseOriginalEvidenceAndOnlyThatEvidenceCanReleaseMoney [0.012s]
+
+com.digitalbank.account.security.SecurityBoundaryTest · 6 项
+PASS internalCommandsRequireConfiguredExactServiceToken [0.008s]
+PASS genericPrincipalResolvesIdentityAndCannotGainUnscopedStaffAccess [0.004s]
+PASS authenticatedActorScopeCannotBeChangedAfterConstruction [0.003s]
+PASS customerAuthenticationRequiresNormalVerifiedRecord [0.003s]
+PASS staffMustHaveBothApplicableRoleAndExactObjectScope [0.003s]
+PASS identityAndRoleHeadersCannotAuthenticateARequest [0.002s]
+
+com.digitalbank.account.support.InputContractTest · 4 项
+PASS amountRetainsCentsAtBothDecimalBoundaries [0.001s]
+PASS repeatedRequestIdCanBeSuppliedInBodyHeaderOrBoth [0.002s]
+PASS invalidAmountCannotBeRoundedOrOverflowDatabasePrecision [0.001s]
+PASS conflictingMissingOrAbbreviatedRequestIdsAreRejected [0.001s]
+
+本地原始证据位于 backend/s2-h2-regression.log 和两个模块的 target/surefire-reports/。
+第一次在受限环境按基线运行时，远程会话校验 Bean 初始化报 Unable to establish loopback connection。此处记录的是测试 profile 使用本地会话校验后，离线重跑成功的结果。

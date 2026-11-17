@@ -1,0 +1,41 @@
+S2 实验四独立 MySQL 回归执行证据
+完成时间 2026-11-17 14:31:56 +08:00
+生产源码基线 1a89c0b57a40a9a88bbee27d69d89b4fbc41f389 + S2 测试改动
+Windows 11 / JDK 21.0.9 / Maven 3.9.11 / MySQL 8.4.13 InnoDB
+执行人 Codex（S2 本地自动化执行）
+
+测试实例 SQL 指纹（VERSION、端口、DATABASE、默认存储引擎）
+8.4.13	42079	s2_exp4_test	InnoDB
+端口由运行时选择。数据库为本机一次性实例，测试结束后已停止并清理数据目录。
+连接池会话使用 SET time_zone = '+08:00'；测试配置加载 schema-test.sql 和 db/s2-incremental.sql。
+
+从 backend 目录执行的离线回归命令
+mvn -B -o -s .mvn/central-settings.xml "-Dmaven.repo.local=D:/software engineering/tmp/s2-maven/repository" -Dsurefire.timeout=180 -pl account-service -am -l s2-mysql-regression.log test
+用 S2_TEST_DB_URL、S2_TEST_DB_USER、S2_TEST_DB_PASSWORD、S2_TEST_DB_DRIVER、S2_TEST_DB_INIT_SQL 指定独立 MySQL 库。
+
+Maven 日志摘要
+[INFO] Tests run: 11, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.378 s -- in com.digitalbank.common.web.AuthenticationFilterTest
+[INFO] Tests run: 11, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Tests run: 17, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 47.52 s -- in com.digitalbank.account.AccountLifecycleIntegrationTest
+[INFO] Tests run: 25, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 7.339 s -- in com.digitalbank.account.PostingIntegrationTest
+[INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.190 s -- in com.digitalbank.account.security.SecurityBoundaryTest
+[INFO] Tests run: 4, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.004 s -- in com.digitalbank.account.support.InputContractTest
+[INFO] Tests run: 52, Failures: 0, Errors: 0, Skipped: 0
+[INFO] BUILD SUCCESS
+[INFO] Finished at: 2026-11-17T14:31:56+08:00
+
+PostingIntegrationTest 中的基本路径与回滚验证实例（Surefire）
+PASS freezeBeforeAcceptancePersistsRejectionWhileFreezeAfterAcceptanceAllowsConfirmation [0.205s]
+PASS acceptingASuccessfulDepositReturnsTheExistingOutcomeWithoutPostingAgain [0.157s]
+PASS depositAcceptanceAppliesTheEffectiveSingleLimit(String, String, String)[1] [0.15s]
+PASS depositAcceptanceAppliesTheEffectiveSingleLimit(String, String, String)[2] [0.179s]
+PASS repeatedAndConcurrentSuccessfulDepositHasOneMoneyEffect [0.189s]
+PASS transferFailureAtSecondFlowRollsBackBothAccountsAndCanBeSafelyRetried [0.464s]
+
+转账回滚断言：第二条流水写入失败后付款方 B/R 为 500.00/100.00，收款方为 20.00/0.00。
+原交易保持 PROCESSING，逐笔预留保持 RESERVED，原单流水为 0 条。
+撤除测试约束后重试并重放，交易 SUCCESS，付款方 B/R 为 400.00/0.00，收款方为 120.00/0.00，原单总流水为 2 条。
+
+原始证据 backend/s2-mysql-regression.log 及 common、account-service 的 target/surefire-reports/。
+此前 H2 的 Surefire XML 已另存于 backend/target/s2-test-evidence/H2/。
+S4 交接的 MySQL 8.0.13 与网关联调证据仍待实际环境验证。
