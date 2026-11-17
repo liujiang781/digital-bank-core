@@ -79,4 +79,47 @@ class IdempotencyServiceTest {
         assertTrue(second.isNew());
         assertFalse(first.tradeNo().equals(second.tradeNo()));
     }
+
+    @Test
+    void replayAfterStatusAdvancedReturnsCurrentStatus() {
+        Claim first = service.claim(IDENTITY, "DEPOSIT", REQUEST, HASH_A, ACCOUNT,
+                new BigDecimal("100.00"), "CNY");
+        jdbc.update("UPDATE `transaction` SET status = 'SUCCESS' WHERE trade_no = ?", first.tradeNo());
+
+        Claim replay = service.claim(IDENTITY, "DEPOSIT", REQUEST, HASH_A, ACCOUNT,
+                new BigDecimal("100.00"), "CNY");
+
+        assertFalse(replay.isNew());
+        assertEquals(first.tradeNo(), replay.tradeNo());
+        assertEquals("SUCCESS", replay.status());
+    }
+
+    @Test
+    void conflictDoesNotChangeOriginalRow() {
+        Claim first = service.claim(IDENTITY, "DEPOSIT", REQUEST, HASH_A, ACCOUNT,
+                new BigDecimal("100.00"), "CNY");
+
+        assertThrows(BizException.class, () -> service.claim(IDENTITY, "DEPOSIT", REQUEST, HASH_B,
+                ACCOUNT, new BigDecimal("200.00"), "CNY"));
+
+        assertEquals(first.tradeNo(), jdbc.queryForObject(
+                "SELECT trade_no FROM `transaction` WHERE request_id = ?", String.class, REQUEST));
+        assertEquals(0, new BigDecimal("100.00").compareTo(jdbc.queryForObject(
+                "SELECT amount FROM `transaction` WHERE request_id = ?", BigDecimal.class, REQUEST)));
+        assertEquals(HASH_A, jdbc.queryForObject(
+                "SELECT request_hash FROM `transaction` WHERE request_id = ?", String.class, REQUEST));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM `transaction` WHERE request_id = ?", Integer.class, REQUEST));
+    }
+
+    @Test
+    void sameRequestIdForDifferentIdentityCreatesSeparateTrades() {
+        Claim first = service.claim(IDENTITY, "DEPOSIT", REQUEST, HASH_A, ACCOUNT,
+                new BigDecimal("100.00"), "CNY");
+        Claim second = service.claim("identity-other", "DEPOSIT", REQUEST, HASH_A, ACCOUNT,
+                new BigDecimal("100.00"), "CNY");
+
+        assertTrue(second.isNew());
+        assertFalse(first.tradeNo().equals(second.tradeNo()));
+    }
 }

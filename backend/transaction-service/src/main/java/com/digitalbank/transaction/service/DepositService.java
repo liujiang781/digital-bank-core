@@ -56,8 +56,11 @@ public class DepositService {
         this.stateReader = stateReader;
     }
 
-    public TradeView deposit(Actor actor, String accountId, String amountText, String purpose,
-            String requestId, String traceId) {
+    public TradeView deposit(Actor actor, String accountId, String amountText, String currency,
+            String purpose, String requestId, String traceId) {
+        if (currency != null && !"CNY".equals(currency)) {
+            throw new BizException(ErrorCode.INVALID_ARGUMENT, "币种固定为 CNY");
+        }
         BigDecimal amount = Money.parsePositive(amountText);
         // 对象权限先于认领：S2 快照接口复核账户归属与状态上下文
         account.snapshot(new SnapshotRequest(actor.identityId(), "DEPOSIT", accountId, null, null), traceId);
