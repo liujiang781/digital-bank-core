@@ -1,0 +1,23 @@
+{
+  "backend/README.md": "da929a424a1b21f47b3b1d99ff19f9a6638ef91c0aa428e1e3eafe460e4adce3",
+  "backend/account-service/README.md": "72dec0d3e552cc60ccc7cc35f46334a7f353f5ec82a096f4649cd67f0efe4ac6",
+  "backend/account-service/src/main/java/com/digitalbank/account/security/AccountAccess.java": "2fd0a137eb31c01abb14b22f248300575483aa0b442dd42f33f9e691d2482f6f",
+  "backend/account-service/src/test/java/com/digitalbank/account/security/SecurityBoundaryTest.java": "7341533b9836392f9b202e52b408464420b37a360213018a84150f1a7f416b66",
+  "backend/common/src/main/java/com/digitalbank/common/auth/SessionIdentity.java": "5df8439e90ce1b693fe8d830d354adffd18926b134255d73d45ee8d8db02048b",
+  "backend/common/src/main/java/com/digitalbank/common/web/AuthenticationFilter.java": "1e30b618b8ec9d406dc867c87f5297d71d8e7857c38e6a8e75b2c35581bfa37e",
+  "backend/common/src/test/java/com/digitalbank/common/web/AuthenticationFilterTest.java": "6e98579d9a3aa7c6caf44f80b1cca9dc578d3193d11e18176f760498298e00c1",
+  "backend/gateway/src/main/java/com/digitalbank/gateway/filter/AuthenticationWebFilter.java": "a0ced976c25f96dd440e3f707a55934c1c474d3edc07ca56add6076716258a3d",
+  "backend/gateway/src/test/java/com/digitalbank/gateway/filter/AuthenticationWebFilterTest.java": "716a988a6fb5a5d85695d65a1a38939923edeb625e8dfe5c002ef598110f8269",
+  "backend/scripts/staff_auth_smoke.py": "b6900a64311e21cf4b2b9f780ba3ecd6c570df525bcc1f4c9e129c1c641ae140",
+  "backend/user-service/src/main/java/com/digitalbank/user/config/AuthConfiguration.java": "63d699d0dcc94f2cc82c10543177e99ba240d26576aa54dbdee84776f66dcacf",
+  "backend/user-service/src/main/java/com/digitalbank/user/config/DemoAccountsProperties.java": "4dc11f6c56fbd9704eb507266bac20ac66a30719e905ea1cc13c43b232ca9a4d",
+  "backend/user-service/src/main/java/com/digitalbank/user/config/StaffAuthorizationProperties.java": "f0372fa25cb1afabb9e6213d9acbd471fcd3adfbef448a1388ce490cb8981292",
+  "backend/user-service/src/main/java/com/digitalbank/user/repository/DemoCredentialRepository.java": "6cccc79b2022000b362ce05d8361873a2d1da40b9e5ae161b8004a27b0dab527",
+  "backend/user-service/src/main/java/com/digitalbank/user/repository/InMemorySessionStore.java": "1e78876c230cd861534fa89a0e735345cb32fa1193468cb333c0efbba66dc233",
+  "backend/user-service/src/main/java/com/digitalbank/user/service/SessionService.java": "a540829cf940f9901896ae186f5f4d2592b9cb81bc11d27a2a0b5af4f1e10d19",
+  "backend/user-service/src/main/java/com/digitalbank/user/service/StaffAuthorizationService.java": "e00e36719bf5120ef764b7bf2fa3e31540ec6db3ddb3b6ae1ae3b72f25d19b0a",
+  "backend/user-service/src/main/resources/application.yml": "5ba8e625c1caaba9cac269eb2cd662ba2b7696ae0f1dccac26d8e19f2a90b5ec",
+  "backend/user-service/src/test/java/com/digitalbank/user/StaffAuthorizationTest.java": "c426ba8d89c588684569f802278740b038a9b36f8b99b3a9af4526f775e1ea1a",
+  "backend/user-service/src/test/java/com/digitalbank/user/service/SessionServiceTest.java": "eef87090ef08de79bab0576d80ec038e4c81d7df0b12c1ebfea22beb089dc1fe",
+  "deploy/auth-staff.example.yml": "c4a5ebd6590153d8890ccc60041e47f1213b0e12a7c4ccc1c9066fa30c2b60d2"
+}

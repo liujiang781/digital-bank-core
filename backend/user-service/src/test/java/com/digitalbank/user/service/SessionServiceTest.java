@@ -2,6 +2,7 @@ package com.digitalbank.user.service;
 
 import com.digitalbank.common.exception.BizException;
 import com.digitalbank.user.domain.LoginCredential;
+import com.digitalbank.user.config.StaffAuthorizationProperties;
 import com.digitalbank.user.dto.LoginRequest;
 import com.digitalbank.user.repository.CredentialRepository;
 import com.digitalbank.user.repository.InMemorySessionStore;
@@ -32,7 +33,8 @@ class SessionServiceTest {
         users.put("user-1", credential("NORMAL", "NORMAL", passwordHash));
         CredentialRepository repository = identity -> Optional.ofNullable(users.get(identity));
         var store = new InMemorySessionStore(clock, Duration.ofSeconds(10), 2);
-        service = new SessionService(repository, store, encoder);
+        service = new SessionService(repository, store, encoder,
+                new StaffAuthorizationService(new StaffAuthorizationProperties(Map.of())));
     }
 
     @Test

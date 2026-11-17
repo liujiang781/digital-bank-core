@@ -45,6 +45,10 @@ public class InMemorySessionStore {
     }
 
     public synchronized LoginResponse issue(LoginCredential credential) {
+        return issue(credential, credential.identity());
+    }
+
+    public synchronized LoginResponse issue(LoginCredential credential, SessionIdentity identity) {
         removeExpired();
         if (sessions.size() >= maxSessions) {
             throw new BizException(ErrorCode.SERVICE_UNAVAILABLE, "当前登录会话过多，请稍后重试");
@@ -53,10 +57,10 @@ public class InMemorySessionStore {
         random.nextBytes(bytes);
         String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
         Instant expiresAt = clock.instant().plus(ttl);
-        Session session = new Session(credential.identity(), credential.passwordHash(), expiresAt);
+        Session session = new Session(identity, credential.passwordHash(), expiresAt);
         // 服务端只保留令牌的 SHA-256 指纹，原始令牌只在登录响应中返回。
         sessions.put(hash(token), session);
-        return new LoginResponse(token, "Bearer", expiresAt, credential.identity());
+        return new LoginResponse(token, "Bearer", expiresAt, identity);
     }
 
     public Session require(String token) {

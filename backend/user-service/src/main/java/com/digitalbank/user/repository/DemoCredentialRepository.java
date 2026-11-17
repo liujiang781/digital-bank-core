@@ -1,8 +1,10 @@
 package com.digitalbank.user.repository;
 
 import com.digitalbank.user.domain.LoginCredential;
+import com.digitalbank.user.config.DemoAccountsProperties;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Optional;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
@@ -12,6 +14,11 @@ public final class DemoCredentialRepository implements CredentialRepository {
 
     public DemoCredentialRepository(boolean enabled, String identityId, String password,
             PasswordEncoder passwordEncoder) {
+        this(enabled, identityId, password, passwordEncoder, Map.of());
+    }
+
+    public DemoCredentialRepository(boolean enabled, String identityId, String password,
+            PasswordEncoder passwordEncoder, Map<String, DemoAccountsProperties.Account> accounts) {
         if (!enabled) {
             credentials = Map.of();
             return;
@@ -23,7 +30,21 @@ public final class DemoCredentialRepository implements CredentialRepository {
         }
         LoginCredential credential = new LoginCredential(
                 "DEMO-CUSTOMER-001", identityId, passwordEncoder.encode(password), "NORMAL", "NORMAL");
-        credentials = Map.of(identityId, credential);
+        Map<String, LoginCredential> configured = new HashMap<>();
+        configured.put(identityId, credential);
+        accounts.forEach((id, account) -> {
+            String secret = account.password();
+            int bytes = secret == null ? 0 : secret.getBytes(StandardCharsets.UTF_8).length;
+            if (id.isBlank() || id.length() > 64 || id.equals(identityId)
+                    || account.customerId() == null || account.customerId().isBlank()
+                    || account.customerId().length() > 32
+                    || secret == null || secret.isBlank() || bytes < 12 || bytes > 72) {
+                throw new IllegalArgumentException("额外演示账号必须配置有效身份、客户标识和 12—72 字节密码");
+            }
+            configured.put(id, new LoginCredential(account.customerId(), id,
+                    passwordEncoder.encode(secret), "NORMAL", "NORMAL"));
+        });
+        credentials = Map.copyOf(configured);
     }
 
     @Override

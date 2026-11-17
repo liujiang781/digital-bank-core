@@ -1,6 +1,7 @@
 package com.digitalbank.account.security;
 
 import com.digitalbank.common.api.ErrorCode;
+import com.digitalbank.common.auth.SessionIdentity;
 import com.digitalbank.common.exception.BizException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.security.Principal;
@@ -21,12 +22,18 @@ public class AccountAccess {
         if (principal instanceof Actor actor) return actor;
         if (principal.getName() == null || principal.getName().isBlank()) throw unauthenticated();
 
+        if (principal instanceof SessionIdentity identity && !identity.roles().isEmpty()) {
+            // S1 过滤器在核验 Bearer 会话后提供类型化身份；不接受客户端角色或范围头。
+            return new Actor(identity.identityId(), identity.customerId(),
+                    identity.roles(), identity.accountScope());
+        }
+
         var customers = jdbc.query("SELECT customer_id FROM customer "
                         + "WHERE identity_id = ? AND status = 'NORMAL' AND real_name_status = 'VERIFIED'",
                 (row, index) -> row.getString("customer_id"), principal.getName());
         if (customers.size() != 1) throw unauthenticated();
 
-        // Generic principals have no object scope. S1 must supply an Actor for scoped staff actions.
+        // 普通客户仍核验实名状态；通用 Principal 不获得后台账户范围。
         Set<String> roles = request.isUserInRole("OPERATIONS") ? Set.of("OPERATIONS")
                 : request.isUserInRole("RISK") ? Set.of("RISK") : Set.of();
         return new Actor(principal.getName(), customers.getFirst(), roles, Set.of());

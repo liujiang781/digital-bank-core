@@ -128,7 +128,7 @@ python scripts/smoke.py
 Servlet 用户鉴权过滤器跳过 `/internal/v1/` 下的接口：S2/S3 校验 `X-Internal-Token`，
 S1 会话核验接口校验 `X-Service-Token`。跳过用户鉴权不代表跳过服务身份校验。
 用户会话核验成功后，`getUserPrincipal().getName()` 和 `getRemoteUser()` 返回 `identityId`，
-同时保留 `AccessService` 请求属性。当前会话不包含角色和对象授权范围，不授予运营或风控权限。
+同时保留 `AccessService` 请求属性。会话包含 `roles`、`accountScope`，默认均为空；运营/风控授权由用户服务的 `auth.staff.grants` 服务端清单明确配置，S2 同时核验角色和具体账户范围。配置与验证见 [S1→S2 运营授权交接](../docs/04-测试报告/s1/S1-S2运营授权交接.md)。
 前端开发建议由 Vite 将 `/api` 代理到 `http://localhost:8080`。
 
 实现以实验二 `s5接口契约与交付整合/02-设计文档/服务边界与接口清单.md` 为准：

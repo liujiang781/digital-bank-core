@@ -26,7 +26,7 @@ import reactor.core.publisher.Mono;
 public class AuthenticationWebFilter implements WebFilter {
     private static final List<String> UNTRUSTED_IDENTITY_HEADERS = List.of(
             "X-Customer-Id", "X-Identity-Id", "X-User-Id", "X-User-Roles",
-            "X-Authenticated-User", InternalServiceToken.HEADER
+            "X-Authenticated-User", "X-Roles", "X-Account-Scope", InternalServiceToken.HEADER
     );
 
     private final GatewaySessionVerifier verifier;

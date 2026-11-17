@@ -44,14 +44,15 @@ class AuthenticationWebFilterTest {
         var request = MockServerHttpRequest.post("/api/v1/auth/login")
                 .header("X-Customer-Id", "forged").header("X-Identity-Id", "forged")
                 .header("X-User-Id", "forged").header("X-User-Roles", "OPERATIONS")
-                .header("X-Authenticated-User", "forged").header(InternalServiceToken.HEADER, "forged");
+                .header("X-Authenticated-User", "forged").header(InternalServiceToken.HEADER, "forged")
+                .header("X-Roles", "OPERATIONS").header("X-Account-Scope", "account-1");
         var exchange = MockServerWebExchange.from(request);
         var seen = new AtomicReference<ServerWebExchange>();
         filter(false).filter(exchange, next -> { seen.set(next); return Mono.empty(); }).block();
         assertThat(seen.get()).isNotNull();
         assertThat(seen.get().getRequest().getHeaders().keySet()).doesNotContain(
                 "X-Customer-Id", "X-Identity-Id", "X-User-Id", "X-User-Roles",
-                "X-Authenticated-User", InternalServiceToken.HEADER);
+                "X-Authenticated-User", "X-Roles", "X-Account-Scope", InternalServiceToken.HEADER);
     }
 
     @ParameterizedTest

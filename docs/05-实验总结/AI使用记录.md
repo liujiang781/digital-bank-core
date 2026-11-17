@@ -87,3 +87,11 @@
 - 人工修改与采用结论：待组员审查后填写，未将 AI 自查记作人工审查。
 - AI 工具验证：JDK 21 构建成功，22 项测试通过；五进程 HTTP 验证通过，包括退出撤销、直接端口防绕过和认证依赖故障时返回 503。验证进程已停止。
 - 文件：`backend/common/`、`backend/user-service/`、`backend/gateway/`、`backend/scripts/smoke.py` 和实验三 S1 实现说明。
+
+## 2026-11-17 · S1 运营角色与 S2 账户授权链路
+
+- 工具：Codex；用户以 S1 身份要求完成运营账号、角色与范围、会话扩展、S2 适配、测试和交接材料。
+- AI 修改：服务端静态角色/账户范围配置、显式 demo 员工凭据、公共 SessionIdentity Principal、登录与内部核验、S2 Actor 适配、网关头清理，以及配置样例、HTTP 复现脚本与交接说明。
+- 验证：JDK 21 / Maven 离线全量打包与 166 个测试通过；真实用户服务、账户服务和网关间 27 个 HTTP 用例通过；账户数据库为独立 H2，未连接现有 MySQL；测试进程已停止。
+- 证据：`docs/04-测试报告/s1/证据/2026-11-17/staff-auth-junit-results.json`、`staff-auth-results.json`。
+- 人工审查、修改和采用结论：待组员本人填写，不将工具执行写作人工验收；提交与推送记录以 Git 为准，合并仍按组内评审流程执行。
