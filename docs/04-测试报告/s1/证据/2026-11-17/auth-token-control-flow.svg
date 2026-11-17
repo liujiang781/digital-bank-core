@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="1040" viewBox="0 0 920 1040">
+<style>text{font-family:Arial,sans-serif;fill:#111827;font-size:18px}</style>
+<defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8Z" fill="#2563eb"/></marker></defs>
+<rect width="920" height="1040" fill="white" data-graph-role="background"/>
+<text x="40" y="26" font-size="20" data-graph-role="label">AuthTokens.requireBearer control flow</text>
+<g id="n1" data-graph-role="node"><rect x="200.0" y="28.0" width="200" height="44" rx="8" fill="#ffffff" stroke="#d1d5db"/><text x="300" y="56" text-anchor="middle">1 Entry</text></g>
+<g id="n2" data-graph-role="node"><polygon points="300,115.0 435.0,150 300,185.0 165.0,150" fill="#eff6ff" stroke="#d1d5db"/><text x="300" y="156" text-anchor="middle">2 Headers null?</text></g>
+<g id="n3" data-graph-role="node"><polygon points="300,215.0 435.0,250 300,285.0 165.0,250" fill="#eff6ff" stroke="#d1d5db"/><text x="300" y="256" text-anchor="middle">3 Count != 1?</text></g>
+<g id="n4" data-graph-role="node"><rect x="185.0" y="328.0" width="230" height="44" rx="8" fill="#ffffff" stroke="#d1d5db"/><text x="300" y="356" text-anchor="middle">4 Read first value</text></g>
+<g id="n5" data-graph-role="node"><polygon points="300,415.0 435.0,450 300,485.0 165.0,450" fill="#eff6ff" stroke="#d1d5db"/><text x="300" y="456" text-anchor="middle">5 Value null?</text></g>
+<g id="n6" data-graph-role="node"><polygon points="300,515.0 435.0,550 300,585.0 165.0,550" fill="#eff6ff" stroke="#d1d5db"/><text x="300" y="556" text-anchor="middle">6 Wrong scheme?</text></g>
+<g id="n7" data-graph-role="node"><rect x="185.0" y="628.0" width="230" height="44" rx="8" fill="#ffffff" stroke="#d1d5db"/><text x="300" y="656" text-anchor="middle">7 Extract token</text></g>
+<g id="n8" data-graph-role="node"><polygon points="300,715.0 435.0,750 300,785.0 165.0,750" fill="#eff6ff" stroke="#d1d5db"/><text x="300" y="756" text-anchor="middle">8 Bad format?</text></g>
+<g id="n9" data-graph-role="node"><rect x="185.0" y="828.0" width="230" height="44" rx="8" fill="#ffffff" stroke="#d1d5db"/><text x="300" y="856" text-anchor="middle">9 Return token</text></g>
+<g id="n10" data-graph-role="node"><rect x="610.0" y="105.0" width="210" height="690" rx="8" fill="#ffffff" stroke="#d1d5db"/><text x="715" y="456" text-anchor="middle">10 Throw 401</text></g>
+<g id="n11" data-graph-role="node"><rect x="335.0" y="948.0" width="230" height="44" rx="8" fill="#ffffff" stroke="#d1d5db"/><text x="450" y="976" text-anchor="middle">11 Exit</text></g>
+<text x="490" y="138" data-graph-role="label">True</text>
+<text x="325" y="207" data-graph-role="label">False</text>
+<text x="490" y="238" data-graph-role="label">True</text>
+<text x="325" y="307" data-graph-role="label">False</text>
+<text x="490" y="438" data-graph-role="label">True</text>
+<text x="325" y="507" data-graph-role="label">False</text>
+<text x="490" y="538" data-graph-role="label">True</text>
+<text x="325" y="607" data-graph-role="label">False</text>
+<text x="490" y="738" data-graph-role="label">True</text>
+<text x="325" y="807" data-graph-role="label">False</text>
+<path id="e0" data-graph-role="edge" data-source="n1" data-target="n2" d="M300 72 L300 115" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+<path id="e1" data-graph-role="edge" data-source="n2" data-target="n3" d="M300 185 L300 215" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+<path id="e2" data-graph-role="edge" data-source="n3" data-target="n4" d="M300 285 L300 328" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+<path id="e3" data-graph-role="edge" data-source="n4" data-target="n5" d="M300 372 L300 415" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+<path id="e4" data-graph-role="edge" data-source="n5" data-target="n6" d="M300 485 L300 515" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+<path id="e5" data-graph-role="edge" data-source="n6" data-target="n7" d="M300 585 L300 628" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+<path id="e6" data-graph-role="edge" data-source="n7" data-target="n8" d="M300 672 L300 715" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+<path id="e7" data-graph-role="edge" data-source="n8" data-target="n9" d="M300 785 L300 828" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+<path id="e8" data-graph-role="edge" data-source="n9" data-target="n11" d="M300 872 L300 970 L335 970" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+<path id="e9" data-graph-role="edge" data-source="n10" data-target="n11" d="M715 795 L715 970 L565 970" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+<path id="e10" data-graph-role="edge" data-source="n2" data-target="n10" d="M435 150 L610 150" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+<path id="e11" data-graph-role="edge" data-source="n3" data-target="n10" d="M435 250 L610 250" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+<path id="e12" data-graph-role="edge" data-source="n5" data-target="n10" d="M435 450 L610 450" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+<path id="e13" data-graph-role="edge" data-source="n6" data-target="n10" d="M435 550 L610 550" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+<path id="e14" data-graph-role="edge" data-source="n8" data-target="n10" d="M435 750 L610 750" fill="none" stroke="#2563eb" stroke-width="2" marker-end="url(#arrow)"/>
+</svg>

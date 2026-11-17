@@ -1,0 +1,515 @@
+{
+  "scope": "真实本机 HTTP 用户服务与网关联调；demo 凭据；不使用 MySQL，不代表资金链路验收",
+  "time": "2026-11-17T16:12:10.704376+08:00",
+  "user_port": 60570,
+  "gateway_port": 60571,
+  "total": 17,
+  "passed": 17,
+  "failed": 0,
+  "cases": [
+    {
+      "id": "FT-S1-001",
+      "name": "经网关登录成功",
+      "time": "2026-11-17T16:12:09.601764+08:00",
+      "tester": "S1（Codex 辅助执行）",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/auth/login",
+        "port": 60571,
+        "body": {
+          "identityId": "exp4-s1-http-user",
+          "password": "[REDACTED]"
+        },
+        "headers": {}
+      },
+      "expected_status": 200,
+      "actual_status": 200,
+      "passed": true,
+      "response_headers": {
+        "X-Trace-Id": "71310c1b-9939-4d73-a80b-d6d29c490822",
+        "Cache-Control": "no-store",
+        "Content-Type": "application/json"
+      },
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "token": "[REDACTED]",
+          "tokenType": "Bearer",
+          "expiresAt": "2026-11-17T08:42:09.583760200Z",
+          "customer": {
+            "customerId": "DEMO-CUSTOMER-001",
+            "identityId": "exp4-s1-http-user",
+            "valid": true
+          }
+        },
+        "traceId": "71310c1b-9939-4d73-a80b-d6d29c490822"
+      }
+    },
+    {
+      "id": "FT-S1-002",
+      "name": "错误密码",
+      "time": "2026-11-17T16:12:09.928467+08:00",
+      "tester": "S1（Codex 辅助执行）",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/auth/login",
+        "port": 60571,
+        "body": {
+          "identityId": "exp4-s1-http-user",
+          "password": "wrong-password"
+        },
+        "headers": {}
+      },
+      "expected_status": 401,
+      "actual_status": 401,
+      "passed": true,
+      "response_headers": {
+        "X-Trace-Id": "3893a407-0e64-4ced-8693-bb1807a1e82f",
+        "Content-Type": "application/json"
+      },
+      "response": {
+        "code": "UNAUTHENTICATED",
+        "message": "身份标识或密码错误，或用户不可用",
+        "data": null,
+        "traceId": "3893a407-0e64-4ced-8693-bb1807a1e82f"
+      }
+    },
+    {
+      "id": "FT-S1-003",
+      "name": "不存在的身份",
+      "time": "2026-11-17T16:12:10.254282+08:00",
+      "tester": "S1（Codex 辅助执行）",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/auth/login",
+        "port": 60571,
+        "body": {
+          "identityId": "unknown-s1-user",
+          "password": "wrong-password"
+        },
+        "headers": {}
+      },
+      "expected_status": 401,
+      "actual_status": 401,
+      "passed": true,
+      "response_headers": {
+        "X-Trace-Id": "bf924b81-6d7a-46a8-b85e-a6ec68870d88",
+        "Content-Type": "application/json"
+      },
+      "response": {
+        "code": "UNAUTHENTICATED",
+        "message": "身份标识或密码错误，或用户不可用",
+        "data": null,
+        "traceId": "bf924b81-6d7a-46a8-b85e-a6ec68870d88"
+      }
+    },
+    {
+      "id": "FT-S1-004",
+      "name": "缺少登录字段",
+      "time": "2026-11-17T16:12:10.301460+08:00",
+      "tester": "S1（Codex 辅助执行）",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/auth/login",
+        "port": 60571,
+        "body": {},
+        "headers": {}
+      },
+      "expected_status": 400,
+      "actual_status": 400,
+      "passed": true,
+      "response_headers": {
+        "X-Trace-Id": "ebb68f04-59a0-4d54-9d53-d9723bbf1622",
+        "Content-Type": "application/json"
+      },
+      "response": {
+        "code": "INVALID_ARGUMENT",
+        "message": "请求参数不合法",
+        "data": null,
+        "traceId": "ebb68f04-59a0-4d54-9d53-d9723bbf1622"
+      }
+    },
+    {
+      "id": "FT-S1-005",
+      "name": "UTF8 密码超过 72 字节",
+      "time": "2026-11-17T16:12:10.327197+08:00",
+      "tester": "S1（Codex 辅助执行）",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/auth/login",
+        "port": 60571,
+        "body": {
+          "identityId": "exp4-s1-http-user",
+          "password": "密密密密密密密密密密密密密密密密密密密密密密密密密"
+        },
+        "headers": {}
+      },
+      "expected_status": 400,
+      "actual_status": 400,
+      "passed": true,
+      "response_headers": {
+        "X-Trace-Id": "26500ac3-3f30-426f-83e4-466624453351",
+        "Content-Type": "application/json"
+      },
+      "response": {
+        "code": "INVALID_ARGUMENT",
+        "message": "密码长度超过允许范围",
+        "data": null,
+        "traceId": "26500ac3-3f30-426f-83e4-466624453351"
+      }
+    },
+    {
+      "id": "FT-S1-006",
+      "name": "未登录访问受保护接口",
+      "time": "2026-11-17T16:12:10.340199+08:00",
+      "tester": "S1（Codex 辅助执行）",
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/auth/me",
+        "port": 60571,
+        "body": null,
+        "headers": {}
+      },
+      "expected_status": 401,
+      "actual_status": 401,
+      "passed": true,
+      "response_headers": {
+        "X-Trace-Id": "ce488956-da8e-4337-aee7-1ec09ac45612",
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store"
+      },
+      "response": {
+        "code": "UNAUTHENTICATED",
+        "message": "登录凭证无效或已过期，请重新登录",
+        "data": null,
+        "traceId": "ce488956-da8e-4337-aee7-1ec09ac45612"
+      }
+    },
+    {
+      "id": "FT-S1-007",
+      "name": "畸形令牌",
+      "time": "2026-11-17T16:12:10.366369+08:00",
+      "tester": "S1（Codex 辅助执行）",
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/auth/me",
+        "port": 60571,
+        "body": null,
+        "headers": {
+          "Authorization": "Bearer invalid"
+        }
+      },
+      "expected_status": 401,
+      "actual_status": 401,
+      "passed": true,
+      "response_headers": {
+        "X-Trace-Id": "e44f2eb9-01a8-483c-9759-3eb7da26b717",
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store"
+      },
+      "response": {
+        "code": "UNAUTHENTICATED",
+        "message": "登录凭证无效或已过期，请重新登录",
+        "data": null,
+        "traceId": "e44f2eb9-01a8-483c-9759-3eb7da26b717"
+      }
+    },
+    {
+      "id": "FT-S1-008",
+      "name": "合法令牌读取当前身份",
+      "time": "2026-11-17T16:12:10.453442+08:00",
+      "tester": "S1（Codex 辅助执行）",
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/auth/me",
+        "port": 60571,
+        "body": null,
+        "headers": {
+          "Authorization": "Bearer [REDACTED]"
+        }
+      },
+      "expected_status": 200,
+      "actual_status": 200,
+      "passed": true,
+      "response_headers": {
+        "X-Trace-Id": "546f96c0-bebe-4c08-8ad7-3877f88b00bd",
+        "Cache-Control": "no-store",
+        "Content-Type": "application/json"
+      },
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "customerId": "DEMO-CUSTOMER-001",
+          "identityId": "exp4-s1-http-user",
+          "valid": true
+        },
+        "traceId": "546f96c0-bebe-4c08-8ad7-3877f88b00bd"
+      }
+    },
+    {
+      "id": "FT-S1-009",
+      "name": "伪造身份头不能覆盖会话",
+      "time": "2026-11-17T16:12:10.485427+08:00",
+      "tester": "S1（Codex 辅助执行）",
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/auth/me",
+        "port": 60571,
+        "body": null,
+        "headers": {
+          "Authorization": "Bearer [REDACTED]",
+          "X-Identity-Id": "forged-user",
+          "X-Customer-Id": "forged-customer"
+        }
+      },
+      "expected_status": 200,
+      "actual_status": 200,
+      "passed": true,
+      "response_headers": {
+        "X-Trace-Id": "e9286173-ac4d-4607-b298-72d17b8a2ab7",
+        "Cache-Control": "no-store",
+        "Content-Type": "application/json"
+      },
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "customerId": "DEMO-CUSTOMER-001",
+          "identityId": "exp4-s1-http-user",
+          "valid": true
+        },
+        "traceId": "e9286173-ac4d-4607-b298-72d17b8a2ab7"
+      }
+    },
+    {
+      "id": "FT-S1-010",
+      "name": "内部认证接口不对网关开放",
+      "time": "2026-11-17T16:12:10.505458+08:00",
+      "tester": "S1（Codex 辅助执行）",
+      "request": {
+        "method": "GET",
+        "path": "/internal/v1/auth/session",
+        "port": 60571,
+        "body": null,
+        "headers": {
+          "Authorization": "Bearer [REDACTED]"
+        }
+      },
+      "expected_status": 404,
+      "actual_status": 404,
+      "passed": true,
+      "response_headers": {
+        "X-Trace-Id": "d739fa71-37a7-415d-9a67-daf190c52f93"
+      },
+      "response": null
+    },
+    {
+      "id": "FT-S1-011",
+      "name": "直连内部接口缺服务令牌",
+      "time": "2026-11-17T16:12:10.521444+08:00",
+      "tester": "S1（Codex 辅助执行）",
+      "request": {
+        "method": "GET",
+        "path": "/internal/v1/auth/session",
+        "port": 60570,
+        "body": null,
+        "headers": {
+          "Authorization": "Bearer [REDACTED]"
+        }
+      },
+      "expected_status": 401,
+      "actual_status": 401,
+      "passed": true,
+      "response_headers": {
+        "X-Trace-Id": "ab212652-e365-4125-bdef-0239a9ee167e",
+        "Content-Type": "application/json"
+      },
+      "response": {
+        "code": "UNAUTHENTICATED",
+        "message": "登录凭证无效或已过期，请重新登录",
+        "data": null,
+        "traceId": "ab212652-e365-4125-bdef-0239a9ee167e"
+      }
+    },
+    {
+      "id": "FT-S1-012",
+      "name": "直连内部接口错误服务令牌",
+      "time": "2026-11-17T16:12:10.537405+08:00",
+      "tester": "S1（Codex 辅助执行）",
+      "request": {
+        "method": "GET",
+        "path": "/internal/v1/auth/session",
+        "port": 60570,
+        "body": null,
+        "headers": {
+          "Authorization": "Bearer [REDACTED]",
+          "X-Service-Token": "wrong-service-token"
+        }
+      },
+      "expected_status": 401,
+      "actual_status": 401,
+      "passed": true,
+      "response_headers": {
+        "X-Trace-Id": "556fed17-c233-4f98-94a3-12f867c0fb87",
+        "Content-Type": "application/json"
+      },
+      "response": {
+        "code": "UNAUTHENTICATED",
+        "message": "登录凭证无效或已过期，请重新登录",
+        "data": null,
+        "traceId": "556fed17-c233-4f98-94a3-12f867c0fb87"
+      }
+    },
+    {
+      "id": "FT-S1-013",
+      "name": "服务令牌与用户令牌均合法",
+      "time": "2026-11-17T16:12:10.552854+08:00",
+      "tester": "S1（Codex 辅助执行）",
+      "request": {
+        "method": "GET",
+        "path": "/internal/v1/auth/session",
+        "port": 60570,
+        "body": null,
+        "headers": {
+          "Authorization": "Bearer [REDACTED]",
+          "X-Service-Token": "[REDACTED]"
+        }
+      },
+      "expected_status": 200,
+      "actual_status": 200,
+      "passed": true,
+      "response_headers": {
+        "X-Trace-Id": "abdcda02-144b-4211-a417-51e350350a67",
+        "Cache-Control": "no-store",
+        "Content-Type": "application/json"
+      },
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "customerId": "DEMO-CUSTOMER-001",
+          "identityId": "exp4-s1-http-user",
+          "valid": true
+        },
+        "traceId": "abdcda02-144b-4211-a417-51e350350a67"
+      }
+    },
+    {
+      "id": "FT-S1-014",
+      "name": "仅服务令牌不能代替用户令牌",
+      "time": "2026-11-17T16:12:10.567656+08:00",
+      "tester": "S1（Codex 辅助执行）",
+      "request": {
+        "method": "GET",
+        "path": "/internal/v1/auth/session",
+        "port": 60570,
+        "body": null,
+        "headers": {
+          "X-Service-Token": "[REDACTED]"
+        }
+      },
+      "expected_status": 401,
+      "actual_status": 401,
+      "passed": true,
+      "response_headers": {
+        "X-Trace-Id": "a400209e-f4fc-42b8-bbaa-9b4ff0d44238",
+        "Content-Type": "application/json"
+      },
+      "response": {
+        "code": "UNAUTHENTICATED",
+        "message": "登录凭证无效或已过期，请重新登录",
+        "data": null,
+        "traceId": "a400209e-f4fc-42b8-bbaa-9b4ff0d44238"
+      }
+    },
+    {
+      "id": "FT-S1-015",
+      "name": "通过网关退出",
+      "time": "2026-11-17T16:12:10.594655+08:00",
+      "tester": "S1（Codex 辅助执行）",
+      "request": {
+        "method": "POST",
+        "path": "/api/v1/auth/logout",
+        "port": 60571,
+        "body": null,
+        "headers": {
+          "Authorization": "Bearer [REDACTED]"
+        }
+      },
+      "expected_status": 200,
+      "actual_status": 200,
+      "passed": true,
+      "response_headers": {
+        "X-Trace-Id": "48f73c0b-e9af-4d20-a716-f7eaaedc25c6",
+        "Cache-Control": "no-store",
+        "Content-Type": "application/json"
+      },
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": null,
+        "traceId": "48f73c0b-e9af-4d20-a716-f7eaaedc25c6"
+      }
+    },
+    {
+      "id": "FT-S1-016",
+      "name": "退出后旧令牌立即失效",
+      "time": "2026-11-17T16:12:10.624749+08:00",
+      "tester": "S1（Codex 辅助执行）",
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/auth/me",
+        "port": 60571,
+        "body": null,
+        "headers": {
+          "Authorization": "Bearer [REDACTED]"
+        }
+      },
+      "expected_status": 401,
+      "actual_status": 401,
+      "passed": true,
+      "response_headers": {
+        "X-Trace-Id": "a7bc200f-dfb1-4b59-9bfd-63a03cbb26a5",
+        "Content-Type": "application/json",
+        "Cache-Control": "no-store"
+      },
+      "response": {
+        "code": "UNAUTHENTICATED",
+        "message": "登录凭证无效或已过期，请重新登录",
+        "data": null,
+        "traceId": "a7bc200f-dfb1-4b59-9bfd-63a03cbb26a5"
+      }
+    },
+    {
+      "id": "FT-S1-017",
+      "name": "公共健康检查无需登录",
+      "time": "2026-11-17T16:12:10.658576+08:00",
+      "tester": "S1（Codex 辅助执行）",
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/user/health",
+        "port": 60571,
+        "body": null,
+        "headers": {}
+      },
+      "expected_status": 200,
+      "actual_status": 200,
+      "passed": true,
+      "response_headers": {
+        "X-Trace-Id": "2ed12e5f-caa2-4d00-ae99-d24c2b4cc524",
+        "Content-Type": "application/json"
+      },
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "service": "user-service",
+          "status": "UP"
+        },
+        "traceId": "2ed12e5f-caa2-4d00-ae99-d24c2b4cc524"
+      }
+    }
+  ]
+}
