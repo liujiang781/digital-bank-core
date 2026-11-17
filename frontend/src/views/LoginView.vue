@@ -49,7 +49,7 @@ async function submit() {
       <p class="login-sub">核心业务模拟系统（教学演示）</p>
       <el-form ref="formRef" :model="form" :rules="rules" label-position="top" @keyup.enter="submit">
         <el-form-item label="证件号" prop="identityId">
-          <el-input v-model="form.identityId" placeholder="实名证件号" autocomplete="username" />
+          <el-input v-model="form.identityId" placeholder="身份标识（演示：UID-000001）" autocomplete="username" />
         </el-form-item>
         <el-form-item label="密码" prop="password">
           <el-input

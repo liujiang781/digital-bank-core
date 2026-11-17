@@ -29,11 +29,11 @@ export function logout() {
 }
 
 /**
- * 查询本人实名信息（脱敏）
- * GET /api/v1/customers/me
+ * 查询本人会话信息（脱敏）
+ * GET /api/v1/auth/me（S1 AuthController）
  */
 export function getMe() {
-  return http.get('/customers/me')
+  return http.get('/auth/me')
 }
 
 /**
