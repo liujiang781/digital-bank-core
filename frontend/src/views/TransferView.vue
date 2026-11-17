@@ -8,7 +8,7 @@ import { listAccounts } from '../api/account'
 import { transfer, getTransaction } from '../api/transaction'
 import { useTradeSubmit } from '../composables/useTradeSubmit'
 import TradeResultPanel from '../components/TradeResultPanel.vue'
-import { isValidAmount, formatAmount } from '../utils/money'
+import { isValidAmount, formatAmount, normalizeAmount } from '../utils/money'
 import { accountStatusLabel } from '../utils/status'
 import { newRequestId } from '../utils/requestId'
 
@@ -50,7 +50,7 @@ const { submitting, networkFailed, result, polling, submit, retry, refreshStatus
     transfer({
       accountId: form.accountId,
       payeeAccountId: form.payeeAccountId,
-      amount: form.amount,
+      amount: normalizeAmount(form.amount),
       purpose: form.purpose || null,
       requestId: form.requestId
     }),

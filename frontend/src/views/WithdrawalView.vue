@@ -7,7 +7,7 @@ import { listAccounts } from '../api/account'
 import { withdraw, getTransaction } from '../api/transaction'
 import { useTradeSubmit } from '../composables/useTradeSubmit'
 import TradeResultPanel from '../components/TradeResultPanel.vue'
-import { isValidAmount, formatAmount } from '../utils/money'
+import { isValidAmount, formatAmount, normalizeAmount } from '../utils/money'
 import { accountStatusLabel } from '../utils/status'
 import { newRequestId } from '../utils/requestId'
 
@@ -44,7 +44,7 @@ watch(
 const { submitting, networkFailed, result, polling, submit, retry, refreshStatus } = useTradeSubmit(
   () => withdraw({
     accountId: form.accountId,
-    amount: form.amount,
+    amount: normalizeAmount(form.amount),
     requestId: form.requestId
   }),
   getTransaction
