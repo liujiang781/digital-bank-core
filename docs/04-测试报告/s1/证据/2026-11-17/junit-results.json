@@ -1,0 +1,1194 @@
+{
+  "generated_at": "2026-11-17T16:22:48.491261+08:00",
+  "baseline": "4adeb171d1bec1ae07f8b3e205eb5383d3ccce1b",
+  "working_changes": "新增令牌路径测试、网关鉴权测试、部署凭据兼容性测试与 gateway 测试依赖；修复前端代理端口及演示凭据哈希",
+  "java": "21.0.7",
+  "maven": "3.9.11",
+  "scope": "本地 JUnit、Spring 测试上下文和 H2；非真实 MySQL 全链路验收",
+  "totals": {
+    "tests": 156,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "suites": [
+    {
+      "module": "account-service",
+      "name": "com.digitalbank.account.AccountLifecycleIntegrationTest",
+      "timestamp": null,
+      "tests": 15,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "publicEndpointsRejectUnverifiedIdentityHeadersAndInvalidRequestContracts",
+          "class_name": "com.digitalbank.account.AccountLifecycleIntegrationTest",
+          "seconds": "0.961",
+          "result": "passed"
+        },
+        {
+          "name": "repeatedOpenReturnsOneOriginalAccountAndOneSuccessfulTransaction",
+          "class_name": "com.digitalbank.account.AccountLifecycleIntegrationTest",
+          "seconds": "0.065",
+          "result": "passed"
+        },
+        {
+          "name": "zeroBalancesDoNotPermitClosingAnAccountWithAnUnresolvedDeposit(String)[1]",
+          "class_name": "com.digitalbank.account.AccountLifecycleIntegrationTest",
+          "seconds": "0.059",
+          "result": "passed"
+        },
+        {
+          "name": "zeroBalancesDoNotPermitClosingAnAccountWithAnUnresolvedDeposit(String)[2]",
+          "class_name": "com.digitalbank.account.AccountLifecycleIntegrationTest",
+          "seconds": "0.031",
+          "result": "passed"
+        },
+        {
+          "name": "zeroBalancesDoNotPermitClosingAnAccountWithAnUnresolvedDeposit(String)[3]",
+          "class_name": "com.digitalbank.account.AccountLifecycleIntegrationTest",
+          "seconds": "0.031",
+          "result": "passed"
+        },
+        {
+          "name": "zeroBalancesDoNotPermitClosingAnAccountWithAnUnresolvedDeposit(String)[4]",
+          "class_name": "com.digitalbank.account.AccountLifecycleIntegrationTest",
+          "seconds": "0.027",
+          "result": "passed"
+        },
+        {
+          "name": "closingAlsoChecksPendingIncomingTransfers",
+          "class_name": "com.digitalbank.account.AccountLifecycleIntegrationTest",
+          "seconds": "0.025",
+          "result": "passed"
+        },
+        {
+          "name": "authorizationIsRecheckedBeforeReturningAnIdempotentResult",
+          "class_name": "com.digitalbank.account.AccountLifecycleIntegrationTest",
+          "seconds": "0.04",
+          "result": "passed"
+        },
+        {
+          "name": "concurrentOpenRequestsCannotExceedThreeIncludingFrozenAccounts",
+          "class_name": "com.digitalbank.account.AccountLifecycleIntegrationTest",
+          "seconds": "0.036",
+          "result": "passed"
+        },
+        {
+          "name": "concurrentRetriesOfOneOpenRequestCreateOneAccount",
+          "class_name": "com.digitalbank.account.AccountLifecycleIntegrationTest",
+          "seconds": "0.045",
+          "result": "passed"
+        },
+        {
+          "name": "allRestrictionsMustBeResolvedAndReplayingAnOldFreezeDoesNotRefreeze",
+          "class_name": "com.digitalbank.account.AccountLifecycleIntegrationTest",
+          "seconds": "0.06",
+          "result": "passed"
+        },
+        {
+          "name": "balanceIsDerivedFromTheSameStoredSnapshotAndListRespectsScopes",
+          "class_name": "com.digitalbank.account.AccountLifecycleIntegrationTest",
+          "seconds": "0.03",
+          "result": "passed"
+        },
+        {
+          "name": "latestEnabledPolicyControlsPersonalLimitsAndInvalidUpdatesLeaveThemUnchanged",
+          "class_name": "com.digitalbank.account.AccountLifecycleIntegrationTest",
+          "seconds": "0.026",
+          "result": "passed"
+        },
+        {
+          "name": "auditFailureRollsBackTheStatusLogAndCommandClaim",
+          "class_name": "com.digitalbank.account.AccountLifecycleIntegrationTest",
+          "seconds": "0.027",
+          "result": "passed"
+        },
+        {
+          "name": "closedAccountsRemainQueryableAndNoLongerCountTowardTheOpenLimit",
+          "class_name": "com.digitalbank.account.AccountLifecycleIntegrationTest",
+          "seconds": "0.027",
+          "result": "passed"
+        }
+      ]
+    },
+    {
+      "module": "account-service",
+      "name": "com.digitalbank.account.PostingIntegrationTest",
+      "timestamp": null,
+      "tests": 27,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "recoveringOutgoingTradesRejectLateSuccessAndRetainTheirReservations",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.038",
+          "result": "passed"
+        },
+        {
+          "name": "releasingOneTradeCannotConsumeAnotherTradesReservation",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.012",
+          "result": "passed"
+        },
+        {
+          "name": "freezeBeforeAcceptancePersistsRejectionWhileFreezeAfterAcceptanceAllowsConfirmation",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.01",
+          "result": "passed"
+        },
+        {
+          "name": "internalSnapshotsCheckIdentityAndDoNotExposePayeeBalances",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.037",
+          "result": "passed"
+        },
+        {
+          "name": "reserveAndWithdrawalSubmissionAreIndividuallyIdempotent",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.01",
+          "result": "passed"
+        },
+        {
+          "name": "confirmedExternalSuccessSurvivesLocalDebitRollbackAndCanBeRetried",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.053",
+          "result": "passed"
+        },
+        {
+          "name": "externalFailureKeepsEvidenceAndReservationWhenReleaseRollsBack",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.039",
+          "result": "passed"
+        },
+        {
+          "name": "externalTransferChecksOriginalOrderAndRejectsSettlementWithoutReservation",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.022",
+          "result": "passed"
+        },
+        {
+          "name": "httpBoundariesRejectForgedIdentityAndMissingInternalToken",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.012",
+          "result": "passed"
+        },
+        {
+          "name": "depositEvidenceMustMatchAcceptedTradeAndCannotFlipFinalResult",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.012",
+          "result": "passed"
+        },
+        {
+          "name": "externalTransferRetainsReservationUntilConfirmationAndDebitsOnlyOnce",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.054",
+          "result": "passed"
+        },
+        {
+          "name": "acceptedRiskPassCannotBeReusedAsARejectionAndDepositFailureCannotBypassChannelResult",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.008",
+          "result": "passed"
+        },
+        {
+          "name": "riskRejectionRequiresMatchingPersistentEvidenceAndPersistsTerminalState",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.008",
+          "result": "passed"
+        },
+        {
+          "name": "localFailureCannotBeUsedToTurnUnknownDepositIntoFailure",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.007",
+          "result": "passed"
+        },
+        {
+          "name": "unknownDepositCanLaterSucceedAndLateUnknownCannotEraseTerminalEvidence",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.012",
+          "result": "passed"
+        },
+        {
+          "name": "repeatedAndConcurrentSuccessfulDepositHasOneMoneyEffect",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.016",
+          "result": "passed"
+        },
+        {
+          "name": "lateOutgoingCompletionBelongsToOriginalAcceptanceDay",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.01",
+          "result": "passed"
+        },
+        {
+          "name": "concurrentReservationsCannotBothPassDailyLimitFromAnOldSnapshot",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.015",
+          "result": "passed"
+        },
+        {
+          "name": "transferFailureAtSecondFlowRollsBackBothAccountsAndCanBeSafelyRetried",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.014",
+          "result": "passed"
+        },
+        {
+          "name": "externalReservationAndSuccessBothUseSameDailyOutgoingLimit",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.014",
+          "result": "passed"
+        },
+        {
+          "name": "lowercaseTimeoutReasonCannotReleaseAReservedWithdrawal",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.007",
+          "result": "passed"
+        },
+        {
+          "name": "aNonemptyEvidenceIdCannotMakeAChannelTimeoutAnExplicitDepositFailure",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.005",
+          "result": "passed"
+        },
+        {
+          "name": "aReceiptCannotSkipAccountAcceptanceAndAWithdrawalCannotSkipReservation",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.006",
+          "result": "passed"
+        },
+        {
+          "name": "explicitDepositFailureHasNoBalanceOrFlowAndCannotLaterCreditMoney",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.006",
+          "result": "passed"
+        },
+        {
+          "name": "httpTypeErrorsReturn400InsteadOfCoercingMoneyOrReturning500",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.017",
+          "result": "passed"
+        },
+        {
+          "name": "replayStillChecksOriginalAmountAndTransferPayee",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.009",
+          "result": "passed"
+        },
+        {
+          "name": "recoveringFailureMustReuseOriginalEvidenceAndOnlyThatEvidenceCanReleaseMoney",
+          "class_name": "com.digitalbank.account.PostingIntegrationTest",
+          "seconds": "0.009",
+          "result": "passed"
+        }
+      ]
+    },
+    {
+      "module": "account-service",
+      "name": "com.digitalbank.account.security.SecurityBoundaryTest",
+      "timestamp": null,
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "internalCommandsRequireConfiguredExactServiceToken",
+          "class_name": "com.digitalbank.account.security.SecurityBoundaryTest",
+          "seconds": "0.014",
+          "result": "passed"
+        },
+        {
+          "name": "genericPrincipalResolvesIdentityAndCannotGainUnscopedStaffAccess",
+          "class_name": "com.digitalbank.account.security.SecurityBoundaryTest",
+          "seconds": "0.005",
+          "result": "passed"
+        },
+        {
+          "name": "authenticatedActorScopeCannotBeChangedAfterConstruction",
+          "class_name": "com.digitalbank.account.security.SecurityBoundaryTest",
+          "seconds": "0.003",
+          "result": "passed"
+        },
+        {
+          "name": "customerAuthenticationRequiresNormalVerifiedRecord",
+          "class_name": "com.digitalbank.account.security.SecurityBoundaryTest",
+          "seconds": "0.005",
+          "result": "passed"
+        },
+        {
+          "name": "staffMustHaveBothApplicableRoleAndExactObjectScope",
+          "class_name": "com.digitalbank.account.security.SecurityBoundaryTest",
+          "seconds": "0.004",
+          "result": "passed"
+        },
+        {
+          "name": "identityAndRoleHeadersCannotAuthenticateARequest",
+          "class_name": "com.digitalbank.account.security.SecurityBoundaryTest",
+          "seconds": "0.002",
+          "result": "passed"
+        }
+      ]
+    },
+    {
+      "module": "account-service",
+      "name": "com.digitalbank.account.support.InputContractTest",
+      "timestamp": null,
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "amountRetainsCentsAtBothDecimalBoundaries",
+          "class_name": "com.digitalbank.account.support.InputContractTest",
+          "seconds": "0.0",
+          "result": "passed"
+        },
+        {
+          "name": "repeatedRequestIdCanBeSuppliedInBodyHeaderOrBoth",
+          "class_name": "com.digitalbank.account.support.InputContractTest",
+          "seconds": "0.001",
+          "result": "passed"
+        },
+        {
+          "name": "invalidAmountCannotBeRoundedOrOverflowDatabasePrecision",
+          "class_name": "com.digitalbank.account.support.InputContractTest",
+          "seconds": "0.002",
+          "result": "passed"
+        },
+        {
+          "name": "conflictingMissingOrAbbreviatedRequestIdsAreRejected",
+          "class_name": "com.digitalbank.account.support.InputContractTest",
+          "seconds": "0.003",
+          "result": "passed"
+        }
+      ]
+    },
+    {
+      "module": "common",
+      "name": "com.digitalbank.common.auth.AuthTokensPathTest",
+      "timestamp": null,
+      "tests": 13,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "acceptsValidHeaders(String, String, String)[1]",
+          "class_name": "com.digitalbank.common.auth.AuthTokensPathTest",
+          "seconds": "0.061",
+          "result": "passed"
+        },
+        {
+          "name": "acceptsValidHeaders(String, String, String)[2]",
+          "class_name": "com.digitalbank.common.auth.AuthTokensPathTest",
+          "seconds": "0.002",
+          "result": "passed"
+        },
+        {
+          "name": "acceptsValidHeaders(String, String, String)[3]",
+          "class_name": "com.digitalbank.common.auth.AuthTokensPathTest",
+          "seconds": "0.001",
+          "result": "passed"
+        },
+        {
+          "name": "rejectsInvalidHeaders(String, List)[1]",
+          "class_name": "com.digitalbank.common.auth.AuthTokensPathTest",
+          "seconds": "0.007",
+          "result": "passed"
+        },
+        {
+          "name": "rejectsInvalidHeaders(String, List)[2]",
+          "class_name": "com.digitalbank.common.auth.AuthTokensPathTest",
+          "seconds": "0.001",
+          "result": "passed"
+        },
+        {
+          "name": "rejectsInvalidHeaders(String, List)[3]",
+          "class_name": "com.digitalbank.common.auth.AuthTokensPathTest",
+          "seconds": "0.001",
+          "result": "passed"
+        },
+        {
+          "name": "rejectsInvalidHeaders(String, List)[4]",
+          "class_name": "com.digitalbank.common.auth.AuthTokensPathTest",
+          "seconds": "0.001",
+          "result": "passed"
+        },
+        {
+          "name": "rejectsInvalidHeaders(String, List)[5]",
+          "class_name": "com.digitalbank.common.auth.AuthTokensPathTest",
+          "seconds": "0.001",
+          "result": "passed"
+        },
+        {
+          "name": "rejectsInvalidHeaders(String, List)[6]",
+          "class_name": "com.digitalbank.common.auth.AuthTokensPathTest",
+          "seconds": "0.001",
+          "result": "passed"
+        },
+        {
+          "name": "rejectsInvalidHeaders(String, List)[7]",
+          "class_name": "com.digitalbank.common.auth.AuthTokensPathTest",
+          "seconds": "0.002",
+          "result": "passed"
+        },
+        {
+          "name": "rejectsInvalidHeaders(String, List)[8]",
+          "class_name": "com.digitalbank.common.auth.AuthTokensPathTest",
+          "seconds": "0.001",
+          "result": "passed"
+        },
+        {
+          "name": "rejectsInvalidHeaders(String, List)[9]",
+          "class_name": "com.digitalbank.common.auth.AuthTokensPathTest",
+          "seconds": "0.001",
+          "result": "passed"
+        },
+        {
+          "name": "rejectsInvalidHeaders(String, List)[10]",
+          "class_name": "com.digitalbank.common.auth.AuthTokensPathTest",
+          "seconds": "0.001",
+          "result": "passed"
+        }
+      ]
+    },
+    {
+      "module": "common",
+      "name": "com.digitalbank.common.web.AuthenticationFilterTest",
+      "timestamp": null,
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "rejectedSessionCannotSupplyPrincipal",
+          "class_name": "com.digitalbank.common.web.AuthenticationFilterTest",
+          "seconds": "0.256",
+          "result": "passed"
+        },
+        {
+          "name": "internalPathsAlsoWorkUnderServletContext",
+          "class_name": "com.digitalbank.common.web.AuthenticationFilterTest",
+          "seconds": "0.001",
+          "result": "passed"
+        },
+        {
+          "name": "internalRequestsReachModuleServiceAuthenticationWithoutUserToken(String)[1]",
+          "class_name": "com.digitalbank.common.web.AuthenticationFilterTest",
+          "seconds": "0.003",
+          "result": "passed"
+        },
+        {
+          "name": "internalRequestsReachModuleServiceAuthenticationWithoutUserToken(String)[2]",
+          "class_name": "com.digitalbank.common.web.AuthenticationFilterTest",
+          "seconds": "0.001",
+          "result": "passed"
+        },
+        {
+          "name": "internalRequestsReachModuleServiceAuthenticationWithoutUserToken(String)[3]",
+          "class_name": "com.digitalbank.common.web.AuthenticationFilterTest",
+          "seconds": "0.001",
+          "result": "passed"
+        },
+        {
+          "name": "internalRequestsReachModuleServiceAuthenticationWithoutUserToken(String)[4]",
+          "class_name": "com.digitalbank.common.web.AuthenticationFilterTest",
+          "seconds": "0.002",
+          "result": "passed"
+        },
+        {
+          "name": "missingUserTokenCannotBypassAuthentication(String)[1]",
+          "class_name": "com.digitalbank.common.web.AuthenticationFilterTest",
+          "seconds": "0.003",
+          "result": "passed"
+        },
+        {
+          "name": "missingUserTokenCannotBypassAuthentication(String)[2]",
+          "class_name": "com.digitalbank.common.web.AuthenticationFilterTest",
+          "seconds": "0.002",
+          "result": "passed"
+        },
+        {
+          "name": "missingUserTokenCannotBypassAuthentication(String)[3]",
+          "class_name": "com.digitalbank.common.web.AuthenticationFilterTest",
+          "seconds": "0.002",
+          "result": "passed"
+        },
+        {
+          "name": "downstreamBusinessErrorsAreNotRewrittenAsAuthenticationErrors",
+          "class_name": "com.digitalbank.common.web.AuthenticationFilterTest",
+          "seconds": "0.004",
+          "result": "passed"
+        },
+        {
+          "name": "verifiedSessionSuppliesPrincipalAndPreservesS1IdentityAttribute",
+          "class_name": "com.digitalbank.common.web.AuthenticationFilterTest",
+          "seconds": "0.011",
+          "result": "passed"
+        }
+      ]
+    },
+    {
+      "module": "gateway",
+      "name": "com.digitalbank.gateway.filter.AuthenticationWebFilterTest",
+      "timestamp": null,
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "stripsClientIdentityAndServiceHeadersOnPublicLogin",
+          "class_name": "com.digitalbank.gateway.filter.AuthenticationWebFilterTest",
+          "seconds": "0.591",
+          "result": "passed"
+        },
+        {
+          "name": "missingTokenNeverReachesProtectedRoutes(String)[1]",
+          "class_name": "com.digitalbank.gateway.filter.AuthenticationWebFilterTest",
+          "seconds": "0.093",
+          "result": "passed"
+        },
+        {
+          "name": "missingTokenNeverReachesProtectedRoutes(String)[2]",
+          "class_name": "com.digitalbank.gateway.filter.AuthenticationWebFilterTest",
+          "seconds": "0.004",
+          "result": "passed"
+        },
+        {
+          "name": "missingTokenNeverReachesProtectedRoutes(String)[3]",
+          "class_name": "com.digitalbank.gateway.filter.AuthenticationWebFilterTest",
+          "seconds": "0.003",
+          "result": "passed"
+        },
+        {
+          "name": "rejectedSessionStopsRequest",
+          "class_name": "com.digitalbank.gateway.filter.AuthenticationWebFilterTest",
+          "seconds": "0.004",
+          "result": "passed"
+        },
+        {
+          "name": "duplicateAuthorizationHeadersAreRejected",
+          "class_name": "com.digitalbank.gateway.filter.AuthenticationWebFilterTest",
+          "seconds": "0.003",
+          "result": "passed"
+        },
+        {
+          "name": "validSessionPreservesBearerAndRemovesForgedIdentity",
+          "class_name": "com.digitalbank.gateway.filter.AuthenticationWebFilterTest",
+          "seconds": "0.008",
+          "result": "passed"
+        },
+        {
+          "name": "blocksInternalRoutes(String)[1]",
+          "class_name": "com.digitalbank.gateway.filter.AuthenticationWebFilterTest",
+          "seconds": "0.003",
+          "result": "passed"
+        },
+        {
+          "name": "blocksInternalRoutes(String)[2]",
+          "class_name": "com.digitalbank.gateway.filter.AuthenticationWebFilterTest",
+          "seconds": "0.002",
+          "result": "passed"
+        }
+      ]
+    },
+    {
+      "module": "risk-service",
+      "name": "com.digitalbank.risk.service.RiskCheckServiceTest",
+      "timestamp": null,
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "disabledPolicyFallsBackToPass",
+          "class_name": "com.digitalbank.risk.service.RiskCheckServiceTest",
+          "seconds": "0.636",
+          "result": "passed"
+        },
+        {
+          "name": "repeatedRejectReusesSameEventId",
+          "class_name": "com.digitalbank.risk.service.RiskCheckServiceTest",
+          "seconds": "0.021",
+          "result": "passed"
+        },
+        {
+          "name": "withdrawalOverDailyLimitRejects",
+          "class_name": "com.digitalbank.risk.service.RiskCheckServiceTest",
+          "seconds": "0.007",
+          "result": "passed"
+        },
+        {
+          "name": "depositOverSingleLimitRejects",
+          "class_name": "com.digitalbank.risk.service.RiskCheckServiceTest",
+          "seconds": "0.008",
+          "result": "passed"
+        },
+        {
+          "name": "activeDepositWithinLimitPassesWithoutEvent",
+          "class_name": "com.digitalbank.risk.service.RiskCheckServiceTest",
+          "seconds": "0.006",
+          "result": "passed"
+        },
+        {
+          "name": "frozenAccountRejectsBeforeLimitsWithEvent",
+          "class_name": "com.digitalbank.risk.service.RiskCheckServiceTest",
+          "seconds": "0.007",
+          "result": "passed"
+        },
+        {
+          "name": "externalTransferUsesOutgoingLimits",
+          "class_name": "com.digitalbank.risk.service.RiskCheckServiceTest",
+          "seconds": "0.008",
+          "result": "passed"
+        },
+        {
+          "name": "withdrawalOverSingleLimitRejects",
+          "class_name": "com.digitalbank.risk.service.RiskCheckServiceTest",
+          "seconds": "0.006",
+          "result": "passed"
+        },
+        {
+          "name": "withdrawalWithinLimitsPasses",
+          "class_name": "com.digitalbank.risk.service.RiskCheckServiceTest",
+          "seconds": "0.005",
+          "result": "passed"
+        },
+        {
+          "name": "frozenPayeeRejectsOutgoingTransfer",
+          "class_name": "com.digitalbank.risk.service.RiskCheckServiceTest",
+          "seconds": "0.007",
+          "result": "passed"
+        }
+      ]
+    },
+    {
+      "module": "transaction-service",
+      "name": "com.digitalbank.transaction.channel.MockChannelServiceTest",
+      "timestamp": null,
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "unknownModeSchedulesBoundedReconcile",
+          "class_name": "com.digitalbank.transaction.channel.MockChannelServiceTest",
+          "seconds": "0.726",
+          "result": "passed"
+        },
+        {
+          "name": "progressIsPersistedAcrossReads",
+          "class_name": "com.digitalbank.transaction.channel.MockChannelServiceTest",
+          "seconds": "0.007",
+          "result": "passed"
+        },
+        {
+          "name": "unknownConvergesToCurrentModeAndNeverFlipsBack",
+          "class_name": "com.digitalbank.transaction.channel.MockChannelServiceTest",
+          "seconds": "0.008",
+          "result": "passed"
+        },
+        {
+          "name": "createsSingleRecordWithStableChannelRequestId",
+          "class_name": "com.digitalbank.transaction.channel.MockChannelServiceTest",
+          "seconds": "0.024",
+          "result": "passed"
+        }
+      ]
+    },
+    {
+      "module": "transaction-service",
+      "name": "com.digitalbank.transaction.service.ExternalTransferServiceTest",
+      "timestamp": null,
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "repeatedWriteKeepsFirstElements",
+          "class_name": "com.digitalbank.transaction.service.ExternalTransferServiceTest",
+          "seconds": "0.022",
+          "result": "passed"
+        },
+        {
+          "name": "missingTransferOrderBlocksResumeInsteadOfGuessing",
+          "class_name": "com.digitalbank.transaction.service.ExternalTransferServiceTest",
+          "seconds": "0.007",
+          "result": "passed"
+        },
+        {
+          "name": "resumeReusesRegisteredOrderAndNeverRewrites",
+          "class_name": "com.digitalbank.transaction.service.ExternalTransferServiceTest",
+          "seconds": "0.066",
+          "result": "passed"
+        },
+        {
+          "name": "writesExternalTransferOrderOncePerClaimedTrade",
+          "class_name": "com.digitalbank.transaction.service.ExternalTransferServiceTest",
+          "seconds": "0.007",
+          "result": "passed"
+        }
+      ]
+    },
+    {
+      "module": "transaction-service",
+      "name": "com.digitalbank.transaction.service.FingerprintContractTest",
+      "timestamp": null,
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "purposeIsTrimmedAndAmountStaysNormalized",
+          "class_name": "com.digitalbank.transaction.service.FingerprintContractTest",
+          "seconds": "0.015",
+          "result": "passed"
+        },
+        {
+          "name": "transferFingerprintBindsPayee",
+          "class_name": "com.digitalbank.transaction.service.FingerprintContractTest",
+          "seconds": "0.001",
+          "result": "passed"
+        },
+        {
+          "name": "externalTransferFingerprintBindsBankAndPayeeRef",
+          "class_name": "com.digitalbank.transaction.service.FingerprintContractTest",
+          "seconds": "0.001",
+          "result": "passed"
+        },
+        {
+          "name": "withdrawalFillsPayerInBothAccountFields",
+          "class_name": "com.digitalbank.transaction.service.FingerprintContractTest",
+          "seconds": "0.0",
+          "result": "passed"
+        }
+      ]
+    },
+    {
+      "module": "transaction-service",
+      "name": "com.digitalbank.transaction.service.IdempotencyServiceTest",
+      "timestamp": null,
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "sameKeyDifferentContentConflicts",
+          "class_name": "com.digitalbank.transaction.service.IdempotencyServiceTest",
+          "seconds": "0.01",
+          "result": "passed"
+        },
+        {
+          "name": "sameKeySameContentReturnsOriginalTrade",
+          "class_name": "com.digitalbank.transaction.service.IdempotencyServiceTest",
+          "seconds": "0.006",
+          "result": "passed"
+        },
+        {
+          "name": "claimsNewTradeAsAccepted",
+          "class_name": "com.digitalbank.transaction.service.IdempotencyServiceTest",
+          "seconds": "0.005",
+          "result": "passed"
+        },
+        {
+          "name": "differentRequestIdsCreateSeparateTrades",
+          "class_name": "com.digitalbank.transaction.service.IdempotencyServiceTest",
+          "seconds": "0.004",
+          "result": "passed"
+        }
+      ]
+    },
+    {
+      "module": "transaction-service",
+      "name": "com.digitalbank.transaction.service.TradeQueryStatusAliasTest",
+      "timestamp": null,
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "unknownStatusLiteralsStayRejected",
+          "class_name": "com.digitalbank.transaction.service.TradeQueryStatusAliasTest",
+          "seconds": "0.005",
+          "result": "passed"
+        },
+        {
+          "name": "sevenStateLiteralsStillWork",
+          "class_name": "com.digitalbank.transaction.service.TradeQueryStatusAliasTest",
+          "seconds": "0.007",
+          "result": "passed"
+        },
+        {
+          "name": "mapsLegacySucceededAliasToSuccess",
+          "class_name": "com.digitalbank.transaction.service.TradeQueryStatusAliasTest",
+          "seconds": "0.004",
+          "result": "passed"
+        },
+        {
+          "name": "aliasDoesNotLoosenClaimFingerprint",
+          "class_name": "com.digitalbank.transaction.service.TradeQueryStatusAliasTest",
+          "seconds": "0.006",
+          "result": "passed"
+        }
+      ]
+    },
+    {
+      "module": "transaction-service",
+      "name": "com.digitalbank.transaction.service.TransferServiceTest",
+      "timestamp": null,
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "writesOneTransferOrderPerClaimedTrade",
+          "class_name": "com.digitalbank.transaction.service.TransferServiceTest",
+          "seconds": "0.006",
+          "result": "passed"
+        },
+        {
+          "name": "resumeReusesRegisteredPayeeAndNeverRewrites",
+          "class_name": "com.digitalbank.transaction.service.TransferServiceTest",
+          "seconds": "0.015",
+          "result": "passed"
+        },
+        {
+          "name": "repeatedWriteKeepsFirstElements",
+          "class_name": "com.digitalbank.transaction.service.TransferServiceTest",
+          "seconds": "0.007",
+          "result": "passed"
+        },
+        {
+          "name": "missingTransferOrderBlocksResumeInsteadOfGuessing",
+          "class_name": "com.digitalbank.transaction.service.TransferServiceTest",
+          "seconds": "0.005",
+          "result": "passed"
+        }
+      ]
+    },
+    {
+      "module": "transaction-service",
+      "name": "com.digitalbank.transaction.support.FingerprintsTest",
+      "timestamp": null,
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "nullFieldsBehaveLikeEmptyStringsAndPurposeIsTrimmed",
+          "class_name": "com.digitalbank.transaction.support.FingerprintsTest",
+          "seconds": "0.0",
+          "result": "passed"
+        },
+        {
+          "name": "producesSha256HexOfCompactJsonArray",
+          "class_name": "com.digitalbank.transaction.support.FingerprintsTest",
+          "seconds": "0.0",
+          "result": "passed"
+        },
+        {
+          "name": "differentAmountChangesHash",
+          "class_name": "com.digitalbank.transaction.support.FingerprintsTest",
+          "seconds": "0.0",
+          "result": "passed"
+        }
+      ]
+    },
+    {
+      "module": "transaction-service",
+      "name": "com.digitalbank.transaction.support.MoneyTest",
+      "timestamp": null,
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "parsesTwoDecimalPositiveAmounts",
+          "class_name": "com.digitalbank.transaction.support.MoneyTest",
+          "seconds": "0.0",
+          "result": "passed"
+        },
+        {
+          "name": "rejectsMalformedAmounts",
+          "class_name": "com.digitalbank.transaction.support.MoneyTest",
+          "seconds": "0.001",
+          "result": "passed"
+        },
+        {
+          "name": "invalidAmountUsesInvalidArgumentCode",
+          "class_name": "com.digitalbank.transaction.support.MoneyTest",
+          "seconds": "0.0",
+          "result": "passed"
+        }
+      ]
+    },
+    {
+      "module": "transaction-service",
+      "name": "com.digitalbank.transaction.support.RequestIdsTest",
+      "timestamp": null,
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "matchingHeaderAndBodyPass",
+          "class_name": "com.digitalbank.transaction.support.RequestIdsTest",
+          "seconds": "0.001",
+          "result": "passed"
+        },
+        {
+          "name": "resolvesBodyRequestId",
+          "class_name": "com.digitalbank.transaction.support.RequestIdsTest",
+          "seconds": "0.0",
+          "result": "passed"
+        },
+        {
+          "name": "missingBothFail",
+          "class_name": "com.digitalbank.transaction.support.RequestIdsTest",
+          "seconds": "0.001",
+          "result": "passed"
+        },
+        {
+          "name": "nonUuidFails",
+          "class_name": "com.digitalbank.transaction.support.RequestIdsTest",
+          "seconds": "0.001",
+          "result": "passed"
+        },
+        {
+          "name": "canonicalizesCaseInsensitiveUuid",
+          "class_name": "com.digitalbank.transaction.support.RequestIdsTest",
+          "seconds": "0.0",
+          "result": "passed"
+        },
+        {
+          "name": "mismatchedHeaderAndBodyFail",
+          "class_name": "com.digitalbank.transaction.support.RequestIdsTest",
+          "seconds": "0.001",
+          "result": "passed"
+        }
+      ]
+    },
+    {
+      "module": "user-service",
+      "name": "com.digitalbank.user.AuthControllerTest",
+      "timestamp": null,
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "anonymousAndMalformedTokensAreRejected",
+          "class_name": "com.digitalbank.user.AuthControllerTest",
+          "seconds": "0.199",
+          "result": "passed"
+        },
+        {
+          "name": "wrongPasswordAndUnknownIdentityHaveSameFailure",
+          "class_name": "com.digitalbank.user.AuthControllerTest",
+          "seconds": "0.713",
+          "result": "passed"
+        },
+        {
+          "name": "logoutRevokesTokenImmediately",
+          "class_name": "com.digitalbank.user.AuthControllerTest",
+          "seconds": "0.312",
+          "result": "passed"
+        },
+        {
+          "name": "invalidInputReturns400",
+          "class_name": "com.digitalbank.user.AuthControllerTest",
+          "seconds": "0.019",
+          "result": "passed"
+        },
+        {
+          "name": "loginReturnsSessionWithoutExposingCredentials",
+          "class_name": "com.digitalbank.user.AuthControllerTest",
+          "seconds": "0.335",
+          "result": "passed"
+        },
+        {
+          "name": "internalIntrospectionRequiresBothServiceAndUserCredentials",
+          "class_name": "com.digitalbank.user.AuthControllerTest",
+          "seconds": "0.301",
+          "result": "passed"
+        },
+        {
+          "name": "ownerCheckRejectsOtherCustomers",
+          "class_name": "com.digitalbank.user.AuthControllerTest",
+          "seconds": "0.005",
+          "result": "passed"
+        },
+        {
+          "name": "authenticatedIdentityDoesNotComeFromClientHeaders",
+          "class_name": "com.digitalbank.user.AuthControllerTest",
+          "seconds": "0.298",
+          "result": "passed"
+        }
+      ]
+    },
+    {
+      "module": "user-service",
+      "name": "com.digitalbank.user.InfrastructureTest",
+      "timestamp": null,
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "missingRouteRemains404",
+          "class_name": "com.digitalbank.user.InfrastructureTest",
+          "seconds": "0.306",
+          "result": "passed"
+        },
+        {
+          "name": "unsafeTraceIsReplaced",
+          "class_name": "com.digitalbank.user.InfrastructureTest",
+          "seconds": "0.298",
+          "result": "passed"
+        },
+        {
+          "name": "wrongMethodRemains405",
+          "class_name": "com.digitalbank.user.InfrastructureTest",
+          "seconds": "0.294",
+          "result": "passed"
+        },
+        {
+          "name": "businessErrorUsesContractStatus",
+          "class_name": "com.digitalbank.user.InfrastructureTest",
+          "seconds": "0.294",
+          "result": "passed"
+        },
+        {
+          "name": "unexpectedErrorDoesNotExposeDetails",
+          "class_name": "com.digitalbank.user.InfrastructureTest",
+          "seconds": "0.304",
+          "result": "passed"
+        },
+        {
+          "name": "traceSurvivesInHeaderAndBody",
+          "class_name": "com.digitalbank.user.InfrastructureTest",
+          "seconds": "0.293",
+          "result": "passed"
+        }
+      ]
+    },
+    {
+      "module": "user-service",
+      "name": "com.digitalbank.user.repository.DemoSeedAuthenticationTest",
+      "timestamp": null,
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "deploymentSeedUsesTheConfiguredPasswordAlgorithm(String, String)[1]",
+          "class_name": "com.digitalbank.user.repository.DemoSeedAuthenticationTest",
+          "seconds": "0.302",
+          "result": "passed"
+        },
+        {
+          "name": "deploymentSeedUsesTheConfiguredPasswordAlgorithm(String, String)[2]",
+          "class_name": "com.digitalbank.user.repository.DemoSeedAuthenticationTest",
+          "seconds": "0.292",
+          "result": "passed"
+        },
+        {
+          "name": "deploymentSeedUsesTheConfiguredPasswordAlgorithm(String, String)[3]",
+          "class_name": "com.digitalbank.user.repository.DemoSeedAuthenticationTest",
+          "seconds": "0.292",
+          "result": "passed"
+        }
+      ]
+    },
+    {
+      "module": "user-service",
+      "name": "com.digitalbank.user.repository.JdbcCredentialRepositoryTest",
+      "timestamp": null,
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "identityIsBoundAsParameter",
+          "class_name": "com.digitalbank.user.repository.JdbcCredentialRepositoryTest",
+          "seconds": "0.225",
+          "result": "passed"
+        },
+        {
+          "name": "queryUsesCustomerIdentityAndMapsBothStatuses",
+          "class_name": "com.digitalbank.user.repository.JdbcCredentialRepositoryTest",
+          "seconds": "0.01",
+          "result": "passed"
+        }
+      ]
+    },
+    {
+      "module": "user-service",
+      "name": "com.digitalbank.user.service.SessionServiceTest",
+      "timestamp": null,
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "cases": [
+        {
+          "name": "customerOrCredentialLockInvalidatesExistingSession",
+          "class_name": "com.digitalbank.user.service.SessionServiceTest",
+          "seconds": "0.008",
+          "result": "passed"
+        },
+        {
+          "name": "capacityIsBoundedAndExpiredEntriesAreReclaimed",
+          "class_name": "com.digitalbank.user.service.SessionServiceTest",
+          "seconds": "0.009",
+          "result": "passed"
+        },
+        {
+          "name": "passwordChangeAndDeletedUserInvalidateExistingSession",
+          "class_name": "com.digitalbank.user.service.SessionServiceTest",
+          "seconds": "0.008",
+          "result": "passed"
+        },
+        {
+          "name": "tokensAreDistinctAndRevocationOnlyAffectsSelectedSession",
+          "class_name": "com.digitalbank.user.service.SessionServiceTest",
+          "seconds": "0.006",
+          "result": "passed"
+        },
+        {
+          "name": "disabledCredentialCannotLogin",
+          "class_name": "com.digitalbank.user.service.SessionServiceTest",
+          "seconds": "0.005",
+          "result": "passed"
+        },
+        {
+          "name": "sessionExpiresAtExactDeadline",
+          "class_name": "com.digitalbank.user.service.SessionServiceTest",
+          "seconds": "0.005",
+          "result": "passed"
+        }
+      ]
+    }
+  ]
+}

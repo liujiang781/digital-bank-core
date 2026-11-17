@@ -24,9 +24,9 @@ ON DUPLICATE KEY UPDATE
   real_name_status = VALUES(real_name_status), status = VALUES(status);
 
 INSERT INTO credential (customer_id, username, password_hash, credential_type, status) VALUES
-  ('CUS-0001', 'zhangsan', 'd3ad9315b7be5dd53b31a273b3b3aba5defe700808305aa16a3062b76658a791', 'USERNAME', 'NORMAL'),
-  ('CUS-0002', 'lisi',     'd3ad9315b7be5dd53b31a273b3b3aba5defe700808305aa16a3062b76658a791', 'USERNAME', 'NORMAL'),
-  ('CUS-ADMIN','admin',    '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa822809f74c720a9',  'USERNAME', 'NORMAL')
+  ('CUS-0001', 'zhangsan', '$2a$12$NBP0BKTPbnQ4xufuZWjSKu6mmkiEHFJ2yp.m2ditNCn2Dern93.yy', 'USERNAME', 'NORMAL'),
+  ('CUS-0002', 'lisi',     '$2a$12$NBP0BKTPbnQ4xufuZWjSKu6mmkiEHFJ2yp.m2ditNCn2Dern93.yy', 'USERNAME', 'NORMAL'),
+  ('CUS-ADMIN','admin',    '$2a$12$RVbq8PQr7RxzHb6FXPaPPuVFOKUZyMpOmjUWhHib90qIyivlDfoKW',  'USERNAME', 'NORMAL')
 ON DUPLICATE KEY UPDATE
   password_hash = VALUES(password_hash), status = VALUES(status);
 

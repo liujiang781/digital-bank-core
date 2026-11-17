@@ -1,127 +1,27 @@
-# S4 数据库与环境
+# 数据库与开发部署
 
-## 1. 启动
+完整配置、五服务启动、验收、备份恢复和回滚步骤见 [实验四部署方案](../docs/04-测试报告/部署方案.md)。当前 Compose 仅提供 MySQL 与可选 Redis。
 
-### 方式 A：本地已有 MySQL
+## 结构与演示数据
 
-```bash
-# 1) 复制环境变量
-cp .env.example .env
-# 编辑 .env，填 DB_PASSWORD
+schema.sql 当前定义 13 张表、15 条外键；这是静态 DDL 计数，实际数据库结果需执行验证后填写。演示账户为 ACC_S2_001、ACC_S2_002，初始账面余额分别为 50000.00、30000.00。
 
-# 2) 建库（一次执行）
-mysql -u root -p < sql/schema.sql
+| 登录 identityId | 数据库 username | 实验密码 | 对应账户 |
+| --- | --- | --- | --- |
+| UID-000001 | zhangsan | demo123 | ACC_S2_001 |
+| UID-000002 | lisi | demo123 | ACC_S2_002 |
+| OPS-ADMIN | admin | admin123 | 无；凭据不等同于已实现运营授权 |
 
-# 3) 灌演示数据
-mysql -u root -p payment_db < sql/init-data.sql
-```
+登录接口接收 identityId。用户服务使用 BANK_CREDENTIAL_STORE=mysql 与相应 BANK_DB_* 环境变量。演示密码哈希已与当前 BCrypt 编码器一致；demo 模式凭据另由 BANK_DEMO_* 配置，不能混用两种模式的身份。
 
-### 方式 B：Docker
+## 初始化与启动依赖
 
-```bash
-docker compose -f docker-compose.dev.yml up -d mysql redis
-# 等 MySQL ready 后自动执行 schema.sql（docker-compose.dev.yml 里已配置）
-```
+在 deploy 目录执行 docker compose -f docker-compose.dev.yml up -d mysql，确认 MySQL 健康后再启动应用。Redis 是可选 profile，本轮 S1 会话使用进程内存。
 
-## 2. 验证
+schema.sql 包含 DROP TABLE，init-data.sql 包含 DELETE，二者都会清空现有实验数据；仅用于可重建的独立实验库。已有数据先备份，不能作为无损迁移重复执行。Docker 持久卷已有数据时，不会自动重新导入挂载的初始化 SQL。verify.sql 也应先审查再对实验库运行。
 
-```bash
-mysql -u root -p payment_db < sql/verify.sql
-```
+## 配置与验收
 
-预期输出：
+用户、账户、交易、风控各服务数据库账号需具备对应读写权限。业务内部令牌与 S1 内部认证令牌分别配置，见完整部署方案。真实数据库口令和令牌只保留在本机环境，不提交 Git。
 
-| 检查项 | 预期值 |
-|---|---|
-<<<<<<< Updated upstream
-| table_count | 13 |
-| fk_count | 15 |
-| ACC_S2_001 / ACC_S2_002 余额不变式 | 两个 OK |
-=======
-| table_count | 12 |
-| fk_count | 13 |
-| ACC-0001 / ACC-0002 余额不变式 | 两个 OK |
->>>>>>> Stashed changes
-| 幂等键重复插入 | Duplicate entry（约束生效） |
-
-验证输出见 `验证输出.txt`。
-
-## 3. 演示账户
-
-| 用户名 | 密码 | 账户 | 初始余额 |
-|---|---|---|---|
-<<<<<<< Updated upstream
-| zhangsan | demo123 | ACC_S2_001 | 50000.00 |
-| lisi | demo123 | ACC_S2_002 | 30000.00 |
-=======
-| zhangsan | demo123 | ACC-0001 | 50000.00 |
-| lisi | demo123 | ACC-0002 | 30000.00 |
->>>>>>> Stashed changes
-| admin | admin123 | 运营（UC-TR-08/09） | — |
-
-## 4. 关键约束
-
-- 金额列全部 `DECIMAL(18,2)`，无浮点
-- 幂等键：`UNIQUE(identity_id, business_type, request_id)` — 同键同内容返回原交易，同键不同内容冲突
-- 业务唯一键：`trade_no`、`uk_transaction_flow_role(trade_no, account_id, entry_role)` 防止双方同方向重复记流水
-- CHECK 约束（MySQL 8.0.16+ 生效）：金额 > 0、交易状态枚举、业务类型枚举等
-
-## 5. 交接信息
-
-| 给谁 | 内容 |
-|---|---|
-| S1 | DB_URL = `jdbc:mysql://localhost:3306/payment_db?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai` |
-<<<<<<< Updated upstream
-| S2/S3 | 13 张表结构见 `sql/schema.sql`；`transaction.status` 7 态、`business_type` 5 值见 DDL 注释 |
-| S3 | `mock_channel_deposit` 表已合入 schema.sql（S3 模拟渠道入金记录）；`risk_rule` 已预置 RK-02 LIMIT_POLICY（存款单笔 50000、出账单笔 10000、出账日累计 50000）；演示账户 `ACC_S2_001`/`ACC_S2_002` |
-=======
-| S2/S3 | 12 张表结构见 `sql/schema.sql`；`transaction.status` 7 态、`business_type` 5 值见 DDL 注释 |
->>>>>>> Stashed changes
-| S5 | 演示账号见上方 |
-
-## 6. 文件清单
-
-| 文件 | 作用 |
-|---|---|
-<<<<<<< Updated upstream
-| `sql/schema.sql` | 13 表 DDL，可重复执行 |
-=======
-| `sql/schema.sql` | 12 表 DDL，可重复执行 |
->>>>>>> Stashed changes
-| `sql/init-data.sql` | 演示数据，幂等（INSERT IGNORE） |
-| `sql/verify.sql` | 验收脚本，幂等（先清 DEMO 数据再验证） |
-| `docker-compose.dev.yml` | MySQL 8 + Redis 7 本地开发环境 |
-| `.env.example` | 环境变量模板，复制为 `.env` |
-<<<<<<< Updated upstream
-
-## 7. 数据库账号（S3 服务用）
-
-S3 的 transaction-service / risk-service 默认用以下 MySQL 账号（见各服务 `application.yml`）：
-
-| 账号 | 用途 | 权限 |
-|---|---|---|
-| `transaction_service` | 交易服务 | 写 `transaction` 原单字段、`mock_channel_deposit`；读其余表 |
-| `risk_service` | 风控服务 | 写 `risk_rule`、`risk_event`；读其余表 |
-
-创建账号（root 执行，密码自行替换）：
-
-```sql
-CREATE USER IF NOT EXISTS 'transaction_service'@'%' IDENTIFIED BY 'change_me';
-CREATE USER IF NOT EXISTS 'risk_service'@'%' IDENTIFIED BY 'change_me';
-
-GRANT SELECT, INSERT, UPDATE ON payment_db.`transaction` TO 'transaction_service'@'%';
-GRANT SELECT, INSERT, UPDATE ON payment_db.mock_channel_deposit TO 'transaction_service'@'%';
-GRANT SELECT ON payment_db.account TO 'transaction_service'@'%';
-GRANT SELECT ON payment_db.account_reservation TO 'transaction_service'@'%';
-
-GRANT SELECT, INSERT, UPDATE ON payment_db.risk_rule TO 'risk_service'@'%';
-GRANT SELECT, INSERT ON payment_db.risk_event TO 'risk_service'@'%';
-GRANT SELECT ON payment_db.account TO 'risk_service'@'%';
-GRANT SELECT ON payment_db.`transaction` TO 'risk_service'@'%';
-
-FLUSH PRIVILEGES;
-```
-
-> 本地联调也可以直接用 root：把各服务 `application.yml` 里的 `TRANSACTION_DB_USER`/`RISK_DB_USER` 改成 `root`，或通过环境变量覆盖。
-=======
->>>>>>> Stashed changes
+验证脚本为 sql/verify.sql；执行后核对表与外键、演示账户的账面/预留/可用余额、幂等唯一键及流水一致性。现有验证输出是历史记录，不代表本轮重新执行。此次完成了 H2 回归、演示 SQL 密码兼容性测试和真实认证 HTTP 联调，尚未执行 MySQL 初始化及资金端到端验收。

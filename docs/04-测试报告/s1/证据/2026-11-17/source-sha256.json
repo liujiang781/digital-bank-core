@@ -1,0 +1,13 @@
+{
+  "backend/common/src/main/java/com/digitalbank/common/auth/AuthTokens.java": "5e7f0043357d4cfd66e7fa8c1d1299c300de122b6c165319ccfc09172f97638f",
+  "backend/common/src/test/java/com/digitalbank/common/auth/AuthTokensPathTest.java": "d3cde64d3746e620d3e0c9d0630544371f65bd62bcfeede1ea6c200ec0fc4ee5",
+  "backend/common/src/main/java/com/digitalbank/common/web/AuthenticationFilter.java": "9224b0391b1a730b2257cd4637d832974aa329d956642592832e0529d77005fb",
+  "backend/gateway/pom.xml": "39a52adf8b212ac07e96656298c5cf92e8520c24075f4af778c9cec5cad4b82b",
+  "backend/gateway/src/main/java/com/digitalbank/gateway/filter/AuthenticationWebFilter.java": "a951371eea3173106098dddedaf2019b1e31802a556c9fb1241225361f8116e3",
+  "backend/gateway/src/test/java/com/digitalbank/gateway/filter/AuthenticationWebFilterTest.java": "3833443f0317f7cc074001616f612687143fc45674324db598d25574031284f4",
+  "backend/user-service/src/main/java/com/digitalbank/user/service/SessionService.java": "9b829d40dd89d44038b33c752d5109adfa18b5c7b233ba5c786c1bc659aa96b6",
+  "scripts/test-exp4-s1-http.py": "2b5b54ebe7ec96609adff12fa06f4f4b121d3ee975265ac11773d7807e45453a",
+  "frontend/vite.config.js": "96311f721b1d783e1ab55e14174c982769890379d0506ecdfd45b027a953c06f",
+  "deploy/sql/init-data.sql": "7665f8e857f29e4b4434847497ce81ea29ceca7e36b615e73b86caff49f1e3d2",
+  "backend/user-service/src/test/java/com/digitalbank/user/repository/DemoSeedAuthenticationTest.java": "ea7279e7495a54967f986f2d3d4a05b84ea56a713564cdae14a412df117d3a1d"
+}
