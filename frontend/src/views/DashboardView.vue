@@ -116,6 +116,16 @@ onMounted(load)
 }
 .account-card {
   cursor: pointer;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  transition: transform var(--motion-normal) var(--ease),
+    box-shadow var(--motion-normal) var(--ease),
+    border-color var(--motion-normal) var(--ease);
+}
+.account-card:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-hover);
+  border-color: var(--el-color-primary-light-5);
 }
 .card-row-1 {
   display: flex;
@@ -137,15 +147,25 @@ onMounted(load)
 .balance-value {
   font-size: 26px;
   font-weight: 700;
-  color: #c0392b;
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.5px;
+}
+.balance-label {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-right: 8px;
 }
 .card-row-3 {
   display: flex;
   justify-content: space-between;
   font-size: 13px;
-  color: #909399;
+  color: var(--text-muted);
+  padding-top: 12px;
+  border-top: 1px dashed var(--border-soft);
 }
 .link {
-  color: #409eff;
+  color: var(--brand-accent);
+  font-weight: 500;
 }
 </style>

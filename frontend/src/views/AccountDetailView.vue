@@ -171,26 +171,31 @@ onMounted(refresh)
 }
 .bal-item {
   text-align: center;
+  padding: 12px 8px;
+  border-radius: 10px;
+  background: var(--bg-page);
 }
 .bal-label {
   font-size: 13px;
-  color: #909399;
+  color: var(--text-muted);
 }
 .bal-value {
   font-size: 22px;
   font-weight: 700;
   margin-top: 6px;
+  color: var(--text-main);
+  font-variant-numeric: tabular-nums;
 }
 .bal-value.main {
   font-size: 28px;
-  color: #c0392b;
+  color: var(--brand-accent);
 }
 .bal-value.reserved {
-  color: #e6a23c;
+  color: #b45309;
 }
 .bal-formula {
   font-size: 12px;
-  color: #c0c4cc;
+  color: var(--text-muted);
   margin-top: 4px;
 }
 .open-time {
@@ -199,9 +204,13 @@ onMounted(refresh)
   color: #909399;
 }
 .in {
-  color: #c0392b;
+  color: var(--brand-danger);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 .out {
-  color: #27ae60;
+  color: var(--brand-success);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 </style>

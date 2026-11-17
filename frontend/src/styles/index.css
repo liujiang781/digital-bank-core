@@ -1,27 +1,121 @@
+/* 设计令牌：依据 ui-ux-pro-max skill 的 B2B/金融配色规范
+   Style: Minimalism & Swiss Style（干净、留白、高对比、网格）
+   Colors: Professional navy + blue CTA（浅色背景，light 主题）
+   Typography: IBM Plex Sans（金融/银行场景推荐），中文回退系统字体 */
+:root {
+  /* 品牌与语义色 */
+  --brand-primary: #0f172a;
+  --brand-accent: #0369a1;
+  --brand-accent-hover: #075985;
+  --brand-accent-soft: #e0f2fe;
+  --brand-danger: #dc2626;
+  --brand-success: #15803d;
+
+  /* 表面与文字 */
+  --bg-page: #f8fafc;
+  --bg-card: #ffffff;
+  --text-main: #020617;
+  --text-muted: #475569;
+  --border-soft: #e2e8f0;
+
+  /* 阴影与圆角 */
+  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.06), 0 4px 14px rgba(15, 23, 42, 0.04);
+  --shadow-hover: 0 10px 28px rgba(15, 23, 42, 0.12);
+  --radius: 12px;
+
+  /* 动效：统一 150-300ms，避免闪烁 */
+  --motion-fast: 160ms;
+  --motion-normal: 240ms;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
 html,
 body {
   margin: 0;
   padding: 0;
-  font-family: 'Microsoft YaHei', 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;
-  background-color: #f5f7fa;
-  color: #303133;
+  font-family: 'IBM Plex Sans', 'Microsoft YaHei', 'PingFang SC', 'Helvetica Neue', Arial, sans-serif;
+  background-color: var(--bg-page);
+  color: var(--text-main);
+  -webkit-font-smoothing: antialiased;
+  font-size: 16px;
+  line-height: 1.5;
 }
 
 .page {
-  max-width: 1100px;
+  max-width: 1140px;
   margin: 0 auto;
-  padding: 20px 16px 48px;
+  padding: 24px 20px 56px;
 }
 
 .page-title {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 600;
-  margin: 8px 0 16px;
+  margin: 4px 0 18px;
+  color: var(--text-main);
+  letter-spacing: 0.3px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 标题左侧强调条 */
+.page-title::before {
+  content: '';
+  width: 4px;
+  height: 22px;
+  border-radius: 2px;
+  background: var(--brand-accent);
+}
+
+/* 金额与数字：等宽数字，保证列对齐 */
+.amount,
+.el-table .cell,
+.tabular-num {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 表格横向滚动保护（skill 响应式规则） */
+.el-table__body-wrapper,
+.el-table__header-wrapper {
+  overflow-x: auto;
 }
 
 .card-block {
-  background: #fff;
-  border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 16px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  margin-bottom: 18px;
+  box-shadow: var(--shadow-card);
+  transition: box-shadow var(--motion-normal) var(--ease);
+}
+
+/* 键盘焦点可见（无障碍） */
+:focus-visible {
+  outline: 2px solid var(--brand-accent);
+  outline-offset: 2px;
+}
+
+/* Element Plus 主题色对齐品牌色 */
+:root {
+  --el-color-primary: #0369a1;
+  --el-color-primary-light-3: #4385b7;
+  --el-color-primary-light-5: #79a3cc;
+  --el-color-primary-light-7: #aec3de;
+  --el-color-primary-light-9: #e4edf5;
+  --el-color-primary-dark-2: #025485;
+  --el-border-radius-base: 8px;
+  --el-text-color-primary: #020617;
+  --el-text-color-regular: #475569;
+  --el-border-color-light: #e2e8f0;
+}
+
+/* 尊重系统减少动画偏好 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
