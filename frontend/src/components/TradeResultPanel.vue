@@ -1,6 +1,10 @@
 <script setup>
 // 交易结果面板：展示 tradeNo、当前状态、后端 message 与 traceId。
+<<<<<<< HEAD
 // 非终态（ACCEPTED/PROCESSING/UNKNOWN/RECOVERING）支持"查询最新状态"；
+=======
+// 非终态（RECEIVED/PROCESSING/PENDING/RECOVERING）支持"查询最新状态"；
+>>>>>>> origin/main
 // 成功交易可跳转账户流水；网络失败未送达时提示重试（复用原 requestId）。
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
@@ -22,7 +26,11 @@ const router = useRouter()
 const tradeNo = computed(() => props.result?.data?.tradeNo)
 const status = computed(() => props.result?.data?.status || props.result?.code)
 const open = computed(() => status.value && !isFinalStatus(status.value))
+<<<<<<< HEAD
 const succeeded = computed(() => status.value === 'SUCCESS')
+=======
+const succeeded = computed(() => status.value === 'SUCCEEDED')
+>>>>>>> origin/main
 
 function goFundEntries() {
   router.push({ name: 'transactions' })
