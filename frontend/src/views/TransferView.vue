@@ -107,9 +107,13 @@ onMounted(async () => {
         </el-form-item>
 
         <el-form-item label="收款账户" prop="payeeAccountId">
+          <!-- 收款方可以是他人账户（如 ACC-0002），所以允许手动输入，不局限于本人账户列表 -->
           <el-select
             v-model="form.payeeAccountId"
-            placeholder="选择本行收款账户"
+            filterable
+            allow-create
+            default-first-option
+            placeholder="输入本行收款账号，例如 ACC-0002"
             style="width: 100%"
           >
             <el-option
