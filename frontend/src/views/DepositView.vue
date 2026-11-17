@@ -9,7 +9,7 @@ import { deposit } from '../api/transaction'
 import { getTransaction } from '../api/transaction'
 import { useTradeSubmit } from '../composables/useTradeSubmit'
 import TradeResultPanel from '../components/TradeResultPanel.vue'
-import { isValidAmount, formatAmount } from '../utils/money'
+import { isValidAmount, formatAmount, normalizeAmount } from '../utils/money'
 import { accountStatusLabel } from '../utils/status'
 import { newRequestId } from '../utils/requestId'
 
@@ -49,7 +49,7 @@ const { submitting, networkFailed, result, polling, submit, retry, refreshStatus
   // 提交闭包：引用 form（reactive），重试时读取的还是同一个 requestId
   () => deposit({
     accountId: form.accountId,
-    amount: form.amount,
+    amount: normalizeAmount(form.amount),
     requestId: form.requestId
   }),
   getTransaction

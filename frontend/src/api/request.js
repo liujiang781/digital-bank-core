@@ -13,15 +13,18 @@ import router from '../router'
 
 const TOKEN_KEY = 'dbank_token'
 
+// 会话存在 sessionStorage：每个浏览器标签页独立一份。
+// 这样多个标签页可以同时登录不同账号，互不覆盖；刷新页面仍保留登录态。
+// 若改用 localStorage，同源的所有标签页会共享一个 token，登录会互相顶掉。
 export function getToken() {
-  return localStorage.getItem(TOKEN_KEY) || ''
+  return sessionStorage.getItem(TOKEN_KEY) || ''
 }
 
 export function setToken(token) {
   if (token) {
-    localStorage.setItem(TOKEN_KEY, token)
+    sessionStorage.setItem(TOKEN_KEY, token)
   } else {
-    localStorage.removeItem(TOKEN_KEY)
+    sessionStorage.removeItem(TOKEN_KEY)
   }
 }
 

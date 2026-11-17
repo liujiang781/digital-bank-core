@@ -20,26 +20,22 @@ export function withdraw({ accountId, amount, currency = 'CNY', requestId }) {
 }
 
 /**
- * 转账（UC-TR-03 本行 P0 / UC-TR-04 跨行 P0）
+ * 转账（UC-TR-03 本行 P0）
  * POST /api/v1/transfers
- * 本行：payerAccountId + payeeAccountId
- * 跨行：payerAccountId + externalBankCode + externalPayeeRef（UNKNOWN 待确认语义，BR-16/17）
+ * 后端 TransferRequest 字段：accountId（付款账户）、payeeAccountId、amount、currency、purpose、requestId。
+ * 本轮 S3 只实现本行转账；跨行（UC-TR-04）按交接文档第 7.1 节需另立契约版本，暂不提交。
  */
 export function transfer({
-  payerAccountId,
-  payeeAccountId = null,
-  externalBankCode = null,
-  externalPayeeRef = null,
+  accountId,
+  payeeAccountId,
   amount,
   currency = 'CNY',
   purpose = null,
   requestId
 }) {
   return http.post('/transfers', {
-    payerAccountId,
+    accountId,
     payeeAccountId,
-    externalBankCode,
-    externalPayeeRef,
     amount,
     currency,
     purpose,
