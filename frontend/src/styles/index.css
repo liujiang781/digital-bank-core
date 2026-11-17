@@ -74,11 +74,10 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* 表格横向滚动保护（skill 响应式规则） */
-.el-table__body-wrapper,
-.el-table__header-wrapper {
-  overflow-x: auto;
-}
+/* 表格横向滚动由 Element Plus 自己管理。
+   不要给 .el-table__body-wrapper / .el-table__header-wrapper 加 overflow-x:
+   表头和表体是两个容器，Element Plus 用 JS 同步它们的滚动；
+   手动加 overflow-x 会破坏同步，导致表头与数据列错位。 */
 
 .card-block {
   background: var(--bg-card);
