@@ -45,13 +45,15 @@ public class DepositService {
     private final AccountClient account;
     private final RiskClient risk;
     private final MockChannelService channel;
+    private final TradeStateReader stateReader;
 
     public DepositService(IdempotencyService idempotency, AccountClient account,
-            RiskClient risk, MockChannelService channel) {
+            RiskClient risk, MockChannelService channel, TradeStateReader stateReader) {
         this.idempotency = idempotency;
         this.account = account;
         this.risk = risk;
         this.channel = channel;
+        this.stateReader = stateReader;
     }
 
     public TradeView deposit(Actor actor, String accountId, String amountText, String purpose,
@@ -94,14 +96,7 @@ public class DepositService {
     }
 
     public TradeView currentView(String tradeNo, String traceId) {
-        try {
-            Outcome outcome = account.outcome(tradeNo, traceId);
-            return new TradeView(outcome.tradeNo(), outcome.status(), outcome.reasonCode());
-        } catch (BizException unreachable) {
-            IdempotencyService.TradeRow row = idempotency.readTrade(tradeNo);
-            if (row == null) throw new BizException(ErrorCode.TRADE_NOT_FOUND, "交易不存在");
-            return new TradeView(row.tradeNo(), row.status(), row.failureReason());
-        }
+        return stateReader.currentView(tradeNo, traceId);
     }
 
     /**
