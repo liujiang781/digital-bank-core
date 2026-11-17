@@ -1,0 +1,88 @@
+{
+  "completedAt": "2026-11-17T16:13:52.1922502+08:00",
+  "source": "16034e3",
+  "mysql": "8.4.13",
+  "gatewayPort": 43794,
+  "databasePort": 43738,
+  "loginIdentity": "UID-000001",
+  "request": {
+    "amount": "100.00",
+    "purpose": "S2 isolated experiment 4",
+    "accountId": "ACC_S2_001",
+    "currency": "CNY",
+    "requestId": "3865cc1e-d5b8-4586-819c-4ab87724f68d"
+  },
+  "first": {
+    "code": "SUCCEEDED",
+    "message": "请求成功",
+    "data": {
+      "tradeNo": "TRD2026111797AB0F78",
+      "status": "SUCCESS",
+      "reasonCode": null
+    },
+    "traceId": "s2-exp4-3865cc1e"
+  },
+  "replay": {
+    "code": "SUCCEEDED",
+    "message": "请求成功",
+    "data": {
+      "tradeNo": "TRD2026111797AB0F78",
+      "status": "SUCCESS",
+      "reasonCode": null
+    },
+    "traceId": "s2-exp4-3865cc1e-replay"
+  },
+  "trade": {
+    "code": "SUCCEEDED",
+    "message": "请求成功",
+    "data": {
+      "tradeNo": "TRD2026111797AB0F78",
+      "businessType": "DEPOSIT",
+      "status": "SUCCESS",
+      "amount": "100.00",
+      "failureReason": null
+    },
+    "traceId": "76044c4e-2373-4139-9814-e39997ede4ba"
+  },
+  "balanceBefore": {
+    "accountId": "ACC_S2_001",
+    "currency": "CNY",
+    "status": "ACTIVE",
+    "bookBalance": "50000.00",
+    "reservedAmount": "0.00",
+    "availableBalance": "50000.00"
+  },
+  "balanceAfter": {
+    "accountId": "ACC_S2_001",
+    "currency": "CNY",
+    "status": "ACTIVE",
+    "bookBalance": "50100.00",
+    "reservedAmount": "0.00",
+    "availableBalance": "50100.00"
+  },
+  "sqlBefore": [
+    "account_id\tbook_balance\treserved_amount\tavailable",
+    "ACC_S2_001\t50000.00\t0.00\t50000.00"
+  ],
+  "sqlFirst": [
+    "account_id\tbook_balance\treserved_amount\tavailable",
+    "ACC_S2_001\t50100.00\t0.00\t50100.00",
+    "trade_no\tstatus\tamount\trequest_id",
+    "TRD2026111797AB0F78\tSUCCESS\t100.00\t3865cc1e-d5b8-4586-819c-4ab87724f68d",
+    "trade_no\tentry_role\tdirection\tamount\tbook_balance_after",
+    "TRD2026111797AB0F78\tDEPOSIT_IN\tCREDIT\t100.00\t50100.00",
+    "flow_count",
+    "1"
+  ],
+  "sqlAfterReplay": [
+    "account_id\tbook_balance\treserved_amount\tavailable",
+    "ACC_S2_001\t50100.00\t0.00\t50100.00",
+    "trade_no\tstatus\tamount\trequest_id",
+    "TRD2026111797AB0F78\tSUCCESS\t100.00\t3865cc1e-d5b8-4586-819c-4ab87724f68d",
+    "trade_no\tentry_role\tdirection\tamount\tbook_balance_after",
+    "TRD2026111797AB0F78\tDEPOSIT_IN\tCREDIT\t100.00\t50100.00",
+    "flow_count",
+    "1"
+  ],
+  "result": "PASS"
+}
