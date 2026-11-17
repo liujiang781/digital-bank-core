@@ -60,16 +60,24 @@ foreach ($port in @(8081, 8082, 8083, 8084, 8090, 5173)) {
 # 用 Process 直接启动并让脚本保持等待，进程能持续存活。
 function Start-Backend {
   param([string]$Name, [string]$Jar, [hashtable]$Envs)
-  $lines = @('@echo off')
-  foreach ($k in $Envs.Keys) { $lines += "set `"$k=$($Envs[$k])`"" }
-  $lines += "`"$(($Java -replace '\\','/'))`" -jar `"$Jar`""
-  $lines += "exit /b %ERRORLEVEL%"
+  $logFile = Join-Path $Logs "$Name.log"
   $cmdFile = Join-Path $Logs "_$Name.cmd"
-  [System.IO.File]::WriteAllLines($cmdFile, $lines, [System.Text.Encoding]::ASCII)
 
+  # 启动前清空旧日志，避免就绪检测读到上一次的 Started 标记
+  [System.IO.File]::WriteAllText($logFile, '')
+
+  # cmd 路径含中文（D:\AAA编程\软件工程），必须用带 BOM 的 UTF-8 写，
+  # 且第一行 chcp 65001 让 cmd 按 UTF-8 解释路径。
+  $lines = @('@echo off', 'chcp 65001 >nul')
+  foreach ($k in $Envs.Keys) { $lines += "set `"$k=$($Envs[$k])`"" }
+  $lines += "call `"$Java`" -jar `"$Jar`""
+  $lines += "exit /b %ERRORLEVEL%"
+  [System.IO.File]::WriteAllLines($cmdFile, $lines, (New-Object System.Text.UTF8Encoding $true))
+
+  # 用 cmd /c 执行 cmd 文件，输出重定向到日志
   $psi = New-Object System.Diagnostics.ProcessStartInfo
   $psi.FileName = 'cmd.exe'
-  $psi.Arguments = "/c `"$cmdFile > `"$(Join-Path $Logs "$Name.log")`_ 2>&1`""
+  $psi.Arguments = '/c "' + $cmdFile + ' > "' + $logFile + '" 2>&1"'
   $psi.WorkingDirectory = $Backend
   $psi.UseShellExecute = $false
   $psi.CreateNoWindow = $true
@@ -135,6 +143,8 @@ foreach ($m in @('user-service', 'account-service', 'risk-service', 'transaction
 
 # ---- 启动前端：显式补 Node 路径到 PATH ----
 Write-Host '启动前端...' -ForegroundColor Yellow
+$feLog = Join-Path $Logs 'frontend.log'
+[System.IO.File]::WriteAllText($feLog, '')
 $psi = New-Object System.Diagnostics.ProcessStartInfo
 $psi.FileName = 'cmd.exe'
 $psi.Arguments = "/c `"set `"PATH=$NodeBin;%PATH%`" && cd /d `"$Frontend`" && npm run dev > `"$Logs\frontend.log`" 2>&1`""
