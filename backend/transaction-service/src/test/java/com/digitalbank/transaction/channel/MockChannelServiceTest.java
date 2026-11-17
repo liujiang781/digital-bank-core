@@ -27,6 +27,7 @@ class MockChannelServiceTest {
     @BeforeEach
     void resetState() {
         // 清理上一条测试的残留（固定 trade_no 需要干净的可 INSERT 状态）
+        jdbc.update("DELETE FROM transfer_order");
         jdbc.update("DELETE FROM mock_channel_deposit");
         jdbc.update("DELETE FROM `transaction`");
         channel.setMode(MockChannelService.SUCCESS);

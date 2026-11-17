@@ -123,4 +123,22 @@ class RiskCheckServiceTest {
         assertEquals("REJECT", decision.result());
         assertEquals("ACCOUNT_STATUS_INVALID", decision.reasonCode());
     }
+
+    /** 跨行转账（S2-S3 跨行交接文档第 1 节）：与取款/本行转账共用出账单笔与日累计限额。 */
+    @Test
+    void externalTransferUsesOutgoingLimits() {
+        Decision overSingle = service.check(external("10000.01", "0.00"));
+        assertEquals("REJECT", overSingle.result());
+        assertEquals("SINGLE_LIMIT_EXCEEDED", overSingle.reasonCode());
+        Decision withinSingle = service.check(external("10000.00", "0.00"));
+        assertEquals("PASS", withinSingle.result());
+        Decision overDaily = service.check(external("2000.00", "49000.00"));
+        assertEquals("REJECT", overDaily.result());
+        assertEquals("DAILY_LIMIT_EXCEEDED", overDaily.reasonCode());
+    }
+
+    private CheckRequest external(String amount, String used) {
+        return new CheckRequest(TRADE, "identity-r001", "EXTERNAL_TRANSFER", amount, "CNY",
+                new AccountView("ACC_R001", "ACTIVE", "10000.00", "50000.00", used), null);
+    }
 }

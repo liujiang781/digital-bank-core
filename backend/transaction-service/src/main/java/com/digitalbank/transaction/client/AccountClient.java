@@ -6,6 +6,7 @@ import com.digitalbank.common.exception.BizException;
 import com.digitalbank.common.trace.TraceIds;
 import com.digitalbank.transaction.dto.TransactionDtos.Command;
 import com.digitalbank.transaction.dto.TransactionDtos.DepositResult;
+import com.digitalbank.transaction.dto.TransactionDtos.ExternalTransferResult;
 import com.digitalbank.transaction.dto.TransactionDtos.Failure;
 import com.digitalbank.transaction.dto.TransactionDtos.Outcome;
 import com.digitalbank.transaction.dto.TransactionDtos.Release;
@@ -91,6 +92,36 @@ public class AccountClient {
     /** 按明确本地失败依据释放原交易预留（evidenceType 固定 LOCAL_FAILURE；超时或未知不得作为释放依据）。 */
     public Outcome release(Release release, String tradeNo, String traceId) {
         return sendCommand("/internal/v1/postings/releases", release, tradeNo, traceId);
+    }
+
+    /**
+     * 跨行渠道回执（external-transfer-results）：S2 先登记渠道结果再推进扣款/释放。
+     * 重试语义与存款命令相反：RECOVERING（失败已登记待释放）、登记成功但扣款未完成的
+     * PROCESSING/UNKNOWN 都要重放同一回执，只有终态停止（跨行交接文档第 3 节）。
+     */
+    public Outcome externalTransferResult(ExternalTransferResult receipt, String tradeNo, String traceId) {
+        BizException last = null;
+        for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+            if (attempt > 0) {
+                Outcome current = queryQuietly(tradeNo, traceId);
+                if (current != null && isTerminal(current.status())) return current;
+                sleep(BACKOFF_MILLIS[attempt - 1]);
+            }
+            try {
+                ApiResponse<Outcome> response = post("/internal/v1/postings/external-transfer-results",
+                        receipt, traceId, OUTCOME_TYPE);
+                return response.data();
+            } catch (BizException e) {
+                last = e;
+                if (!isRetryable(e)) throw e;
+                log.warn("账户服务回执第 {} 次失败，将按规则重试: tradeNo={}", attempt + 1, tradeNo);
+            }
+        }
+        throw last != null ? last : new BizException(ErrorCode.INTERNAL_ERROR, "账户服务调用失败");
+    }
+
+    private static boolean isTerminal(String status) {
+        return "SUCCESS".equals(status) || "FAILED".equals(status) || "REJECTED".equals(status);
     }
 
     /** 主库读取当前资金状态；查询失败由调用方按可查询提示降级。 */

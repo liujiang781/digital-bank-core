@@ -23,7 +23,7 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class RiskCheckService {
-    private static final Set<String> OUTGOING = Set.of("WITHDRAWAL", "INTERNAL_TRANSFER");
+    private static final Set<String> OUTGOING = Set.of("WITHDRAWAL", "INTERNAL_TRANSFER", "EXTERNAL_TRANSFER");
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
     private static final DateTimeFormatter DAY = DateTimeFormatter.ofPattern("yyyyMMdd");
 
