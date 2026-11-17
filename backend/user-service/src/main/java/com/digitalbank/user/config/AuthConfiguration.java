@@ -6,6 +6,7 @@ import com.digitalbank.user.repository.JdbcCredentialRepository;
 import java.time.Clock;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -16,6 +17,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Configuration(proxyBeanMethods = false)
 @EnableScheduling
+@EnableConfigurationProperties({StaffAuthorizationProperties.class, DemoAccountsProperties.class})
 public class AuthConfiguration {
     @Bean
     public Clock authClock() {
@@ -33,8 +35,8 @@ public class AuthConfiguration {
             @Value("${auth.demo.enabled:false}") boolean enabled,
             @Value("${auth.demo.identity-id:demo-user}") String identityId,
             @Value("${auth.demo.password:}") String password,
-            PasswordEncoder encoder) {
-        return new DemoCredentialRepository(enabled, identityId, password, encoder);
+            PasswordEncoder encoder, DemoAccountsProperties accounts) {
+        return new DemoCredentialRepository(enabled, identityId, password, encoder, accounts.users());
     }
 
     @Bean

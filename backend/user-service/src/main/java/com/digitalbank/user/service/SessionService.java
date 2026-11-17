@@ -21,13 +21,15 @@ public class SessionService implements SessionVerifier {
     private final CredentialRepository credentials;
     private final InMemorySessionStore sessions;
     private final PasswordEncoder passwordEncoder;
+    private final StaffAuthorizationService authorization;
     private final String dummyPasswordHash;
 
     public SessionService(CredentialRepository credentials, InMemorySessionStore sessions,
-            PasswordEncoder passwordEncoder) {
+            PasswordEncoder passwordEncoder, StaffAuthorizationService authorization) {
         this.credentials = credentials;
         this.sessions = sessions;
         this.passwordEncoder = passwordEncoder;
+        this.authorization = authorization;
         this.dummyPasswordHash = passwordEncoder.encode("dummy-password-never-used-for-login");
     }
 
@@ -43,7 +45,8 @@ public class SessionService implements SessionVerifier {
             // 不区分用户不存在、密码错误或账号停用，避免泄露用户状态。
             throw new BizException(ErrorCode.UNAUTHENTICATED, "身份标识或密码错误，或用户不可用");
         }
-        return sessions.issue(candidate.get());
+        LoginCredential credential = candidate.get();
+        return sessions.issue(credential, authorization.authorize(credential.identity()));
     }
 
     @Override
@@ -51,7 +54,7 @@ public class SessionService implements SessionVerifier {
         InMemorySessionStore.Session session = sessions.require(token);
         Optional<LoginCredential> candidate = findCredential(session.identity().identityId());
         boolean stillValid = candidate.filter(LoginCredential::isUsable)
-                .filter(credential -> credential.identity().equals(session.identity()))
+                .filter(credential -> authorization.authorize(credential.identity()).equals(session.identity()))
                 .filter(credential -> credential.passwordHash().equals(session.passwordHash()))
                 .isPresent();
         if (!stillValid) {

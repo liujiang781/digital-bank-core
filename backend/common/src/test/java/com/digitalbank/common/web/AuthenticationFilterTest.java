@@ -7,6 +7,7 @@ import com.digitalbank.common.exception.BizException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -85,6 +86,36 @@ class AuthenticationFilterTest {
             reached.set(true);
         });
         assertThat(reached).isTrue();
+    }
+
+    @Test
+    void trustedStaffPrincipalCarriesOnlyVerifiedRolesAndScope() throws Exception {
+        var identity = new SessionIdentity("staff-customer", "operations-1",
+                Set.of("OPERATIONS"), Set.of("account-1"));
+        var filter = new AuthenticationFilter((token, trace) -> identity, new ObjectMapper());
+        var request = new MockHttpServletRequest("POST", "/api/v1/accounts/account-1/freeze");
+        request.addHeader("Authorization", "Bearer " + TOKEN);
+        request.addHeader("X-Roles", "RISK");
+        request.addHeader("X-Account-Scope", "account-2");
+        filter.doFilter(request, new MockHttpServletResponse(), (incoming, response) -> {
+            var authenticated = (HttpServletRequest) incoming;
+            assertThat(authenticated.isUserInRole("OPERATIONS")).isTrue();
+            assertThat(authenticated.isUserInRole("RISK")).isFalse();
+            assertThat(authenticated.getUserPrincipal()).isEqualTo(identity);
+            assertThat(((SessionIdentity) authenticated.getUserPrincipal()).accountScope())
+                    .containsExactly("account-1");
+        });
+    }
+
+    @Test
+    void oldSessionResponsesDefaultToNoStaffPrivileges() throws Exception {
+        var mapper = new ObjectMapper();
+        var identity = mapper.readValue("{\"customerId\":\"c\",\"identityId\":\"i\"}", SessionIdentity.class);
+        assertThat(identity.roles()).isEmpty();
+        assertThat(identity.accountScope()).isEmpty();
+        assertThat(mapper.readValue(mapper.writeValueAsString(identity), SessionIdentity.class))
+                .isEqualTo(identity);
+        assertThat(mapper.writeValueAsString(identity)).doesNotContain("\"name\"");
     }
 
     @Test

@@ -56,7 +56,7 @@ public final class AuthenticationFilter extends OncePerRequestFilter {
             return;
         }
         // 业务异常由 ControllerAdvice 处理，避免吞掉业务层错误。
-        Principal principal = identity::identityId;
+        Principal principal = identity;
         chain.doFilter(new HttpServletRequestWrapper(request) {
             @Override
             public Principal getUserPrincipal() {
@@ -70,8 +70,8 @@ public final class AuthenticationFilter extends OncePerRequestFilter {
 
             @Override
             public boolean isUserInRole(String role) {
-                // 会话尚不包含可信角色，不继承其他身份的角色或客户端身份头。
-                return false;
+                // 角色仅来自服务端核验的会话，不读取客户端角色头或旧 Principal。
+                return identity.roles().contains(role);
             }
         }, response);
     }

@@ -72,15 +72,15 @@ S3 将 `ACCOUNT_SERVICE_URL` 设置为账户服务地址，两个进程设置相
 
 账户对外接口读取服务器设置的 Servlet `Principal`，忽略客户端的 `X-Customer-Id` 和 `X-Identity-Id`。没有服务器认证身份时返回 401。
 
-S1 认证过滤器可提供 `com.digitalbank.account.security.Actor`：
+S1 认证过滤器提供公共模块的 `SessionIdentity`，账户模块将可信后台身份适配为自己的 `Actor`，避免公共模块依赖账户模块：
 
 ```java
-new Actor(identityId, customerId, roles, accountScope)
+new SessionIdentity(customerId, identityId, roles, accountScope)
 ```
 
 `roles` 使用 `OPERATIONS` 和 `RISK`；`accountScope` 是明确授权的账户标识集合。冻结允许有范围权限的运营或风控人员，解冻只允许运营人员。客户只访问本人账户。普通 `Principal.getName()` 按 `identity_id` 映射已实名的正常客户，不赋予后台账户范围权限。
 
-本模块提供身份适配边界，尚需 S1 的真实登录、会话和认证过滤器接入后进行端到端验证。仅在网关透传普通身份头不会建立上述 Principal。模块测试使用测试框架提供的服务器身份，不提供可绕过登录的线上测试接口。
+S1 已接入真实登录、内部会话核验和认证过滤器。角色与范围由用户服务的 `auth.staff.grants` 服务端配置提供；未配置时默认为空。仅透传客户端身份、角色或范围头不会建立授权。配置与联调步骤见 [S1→S2 运营授权交接](../../docs/04-测试报告/s1/S1-S2运营授权交接.md)。
 
 ## 5 S3 内部接口
 

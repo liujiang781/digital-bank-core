@@ -4,6 +4,8 @@
 
 ## 可交付证据
 
+- staff-auth-junit-results.json：后续运营授权实现后的全后端回归，166 个测试，失败、错误、跳过均为 0；与早先 156 个测试的记录分开保留。
+- staff-auth-results.json：用户服务、账户服务和网关三个真实进程间的 27 个 HTTP 授权用例全部通过；使用独立 H2，密码和令牌已脱敏。复现方法见 [S1→S2 交接](../../S1-S2运营授权交接.md)。
 - junit-results.json：最终 Maven 全量运行导出的 156 个测试实例，失败、错误、跳过为 0；排除 JVM 属性和原始 system-out。
 - s1-http-results.json：17 个真实本机 HTTP 用例，全部通过；请求和响应中的密码、服务密钥和会话令牌已脱敏。
 - source-sha256.json：本次关键被测文件及修复文件的摘要。

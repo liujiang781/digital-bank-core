@@ -18,6 +18,7 @@ logging:
     level: "%5p [traceId=%X{traceId:-}]"
 
 auth:
+  # 后台授权默认不配置；显式加载 deploy/auth-staff.example.yml 后按身份授予角色和账户范围。
   verification-mode: local
   internal-token: ${BANK_INTERNAL_TOKEN:}
   session-ttl: ${BANK_SESSION_TTL:30m}

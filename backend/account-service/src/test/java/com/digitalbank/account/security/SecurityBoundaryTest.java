@@ -1,6 +1,7 @@
 package com.digitalbank.account.security;
 
 import com.digitalbank.common.api.ErrorCode;
+import com.digitalbank.common.auth.SessionIdentity;
 import com.digitalbank.common.exception.BizException;
 import java.security.Principal;
 import java.util.HashSet;
@@ -51,6 +52,17 @@ class SecurityBoundaryTest {
         assertThat(actor.accountScope()).isEmpty();
         assertError(ErrorCode.FORBIDDEN, () -> access.requireOperator(actor, "account-1", false));
         assertError(ErrorCode.ACCOUNT_NOT_FOUND, () -> access.requireOwner(actor, "someone-else"));
+    }
+
+    @Test
+    void verifiedS1PrincipalAdaptsStaffWithoutRequiringACustomerRecord() {
+        var request = new MockHttpServletRequest();
+        request.setUserPrincipal(new SessionIdentity("staff-customer", "operations-1",
+                Set.of("OPERATIONS"), Set.of("account-1")));
+        request.addHeader("X-Account-Scope", "account-2");
+        Actor actor = access.requireActor(request);
+        assertThatCode(() -> access.requireOperator(actor, "account-1", false)).doesNotThrowAnyException();
+        assertError(ErrorCode.FORBIDDEN, () -> access.requireOperator(actor, "account-2", false));
     }
 
     @Test
