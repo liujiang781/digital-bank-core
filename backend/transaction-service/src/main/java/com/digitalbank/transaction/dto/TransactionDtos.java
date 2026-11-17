@@ -18,7 +18,12 @@ public final class TransactionDtos {
             @JsonDeserialize(using = AmountStringDeserializer.class) String amount,
             String currency, String purpose, String requestId) { }
 
-    public record TransferRequest(String accountId, String payeeAccountId,
+    /**
+     * 转账受理（跨行交接文档）：付款账户优先 payerAccountId，兼容旧字段 accountId（两者同传且不同值报 400）。
+     * 本行分支填 payeeAccountId；跨行分支填 externalBankCode + externalPayeeRef，payeeAccountId 留空。
+     */
+    public record TransferRequest(String accountId, String payerAccountId, String payeeAccountId,
+            String externalBankCode, String externalPayeeRef,
             @JsonDeserialize(using = AmountStringDeserializer.class) String amount,
             String currency, String purpose, String requestId) { }
 
@@ -46,6 +51,12 @@ public final class TransactionDtos {
 
     public record Release(String tradeNo, String payerAccountId, String amount, String currency,
             String reasonCode, String evidenceType, String evidenceId) { }
+
+    /** 跨行渠道回执（S2 external-transfer-results）：与存款 DepositResult 同构，付款账户字段为 payerAccountId。 */
+    public record ExternalTransferResult(String tradeNo, String payerAccountId,
+            @JsonDeserialize(using = AmountStringDeserializer.class) String amount, String currency,
+            String result, String channelRequestId, String evidenceId,
+            OffsetDateTime observedAt, String reasonCode) { }
 
     public record Outcome(String tradeNo, String status, String reservationStatus, String reasonCode) { }
 

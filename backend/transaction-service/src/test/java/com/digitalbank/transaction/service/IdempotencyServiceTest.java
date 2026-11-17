@@ -34,6 +34,7 @@ class IdempotencyServiceTest {
     @BeforeEach
     void resetData() {
         // H2 内存库与 Spring 上下文在 JVM 内共享，先清理上一条测试的残留，保证认领顺序无关
+        jdbc.update("DELETE FROM transfer_order");
         jdbc.update("DELETE FROM mock_channel_deposit");
         jdbc.update("DELETE FROM `transaction`");
         jdbc.update("MERGE INTO account (account_id) KEY (account_id) VALUES (?)", ACCOUNT);

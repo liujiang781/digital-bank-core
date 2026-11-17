@@ -30,6 +30,19 @@ class FingerprintContractTest {
                 "", "100.00", "CNY", ""));
     }
 
+    /** 跨行（交接文档第 1 节）：指纹纳入外部银行与外部收款方引用，与本行转账互不混用。 */
+    @Test
+    void externalTransferFingerprintBindsBankAndPayeeRef() {
+        String withBankA = Fingerprints.requestHash("EXTERNAL_TRANSFER", PAYER, PAYER,
+                "TESTBANK:masked-ref-1234", "100.00", "CNY", "");
+        assertNotEquals(withBankA, Fingerprints.requestHash("EXTERNAL_TRANSFER", PAYER, PAYER,
+                "OTHERBANK:masked-ref-1234", "100.00", "CNY", ""));
+        assertNotEquals(withBankA, Fingerprints.requestHash("EXTERNAL_TRANSFER", PAYER, PAYER,
+                "TESTBANK:other-ref", "100.00", "CNY", ""));
+        assertNotEquals(withBankA, Fingerprints.requestHash("INTERNAL_TRANSFER", PAYER, PAYER,
+                "TESTBANK:masked-ref-1234", "100.00", "CNY", ""));
+    }
+
     @Test
     void purposeIsTrimmedAndAmountStaysNormalized() {
         assertEquals(

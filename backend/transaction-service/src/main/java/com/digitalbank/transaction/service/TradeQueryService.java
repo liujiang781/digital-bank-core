@@ -35,14 +35,17 @@ public class TradeQueryService {
     private final AccountClient account;
     private final MockChannelService channel;
     private final DepositService depositService;
+    private final ExternalTransferService externalTransferService;
 
     public TradeQueryService(JdbcTemplate jdbc, TransactionAccess access, AccountClient account,
-            MockChannelService channel, DepositService depositService) {
+            MockChannelService channel, DepositService depositService,
+            ExternalTransferService externalTransferService) {
         this.jdbc = jdbc;
         this.access = access;
         this.account = account;
         this.channel = channel;
         this.depositService = depositService;
+        this.externalTransferService = externalTransferService;
     }
 
     public TradeDetailView detail(String actorIdentityId, String tradeNo, String traceId) {
@@ -117,7 +120,12 @@ public class TradeQueryService {
                 ? channel.queryForReconcile(row.tradeNo()) : record;
         if (!"UNKNOWN".equals(latest.result())) {
             // 沿原单、原渠道请求标识查询一次；明确结果幂等上报，由 S2 推进终态
-            depositService.reportChannelResult(row.tradeNo(), row.accountId(), row.amount(), latest, traceId);
+            if ("EXTERNAL_TRANSFER".equals(row.businessType())) {
+                externalTransferService.reportExternalResult(row.tradeNo(), row.accountId(), row.amount(),
+                        latest, traceId);
+            } else {
+                depositService.reportChannelResult(row.tradeNo(), row.accountId(), row.amount(), latest, traceId);
+            }
         }
     }
 
