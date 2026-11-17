@@ -1,0 +1,196 @@
+@startuml
+' Generated from experiment-two sql/schema.sql. Re-run this script after SQL changes.
+hide circle
+skinparam linetype polyline
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam roundcorner 8
+skinparam defaultFontName Microsoft YaHei
+skinparam defaultFontSize 13
+skinparam nodesep 85
+skinparam ranksep 115
+skinparam padding 8
+skinparam ArrowColor #2563EB
+skinparam ArrowFontColor #111827
+skinparam ArrowFontSize 13
+skinparam classBackgroundColor #FFFFFF
+skinparam classBorderColor #9CA3AF
+skinparam classFontColor #111827
+skinparam classHeaderBackgroundColor #EFF6FF
+title
+数字银行系统 · 实验二数据库完整 ER 图
+<size:14>payment_db  /  10 张表 · 11 个物理外键 · 全字段</size>
+end title
+
+entity "客户表\ncustomer" as customer {
+  {field} * id : BIGINT UNSIGNED  <<PK>>
+  {field} * customer_id : VARCHAR(32)  <<U1>>
+  {field} * identity_id : VARCHAR(64)  <<U2>>
+  {field} * name : VARCHAR(100)
+  {field} phone : VARCHAR(20)  <<U3>>
+  {field} email : VARCHAR(100)
+  {field} * real_name_status : VARCHAR(16)
+  {field} * status : VARCHAR(16)
+  {field} * created_at : DATETIME
+  {field} * updated_at : DATETIME
+  {field} * version : INT UNSIGNED
+}
+
+entity "登录凭证表\ncredential" as credential {
+  {field} * id : BIGINT UNSIGNED  <<PK>>
+  {field} * customer_id : VARCHAR(32)  <<FK>>
+  {field} * username : VARCHAR(50)  <<U1>>
+  {field} * password_hash : VARCHAR(255)
+  {field} * credential_type : VARCHAR(16)
+  {field} * status : VARCHAR(16)
+  {field} * created_at : DATETIME
+  {field} * updated_at : DATETIME
+  {field} * version : INT UNSIGNED
+}
+
+entity "账户表\naccount" as account {
+  {field} * id : BIGINT UNSIGNED  <<PK>>
+  {field} * account_id : VARCHAR(32)  <<U1>>
+  {field} * customer_id : VARCHAR(32)  <<FK>>
+  {field} * currency : CHAR(3)
+  {field} * status : VARCHAR(16)
+  {field} * book_balance : DECIMAL(18,2)
+  {field} * reserved_amount : DECIMAL(18,2)
+  {field} personal_single_limit : DECIMAL(18,2)
+  {field} personal_daily_limit : DECIMAL(18,2)
+  {field} * created_at : DATETIME
+  {field} * updated_at : DATETIME
+  {field} * version : INT UNSIGNED
+}
+
+entity "账户状态变更记录表\naccount_status_log" as account_status_log {
+  {field} * id : BIGINT UNSIGNED  <<PK>>
+  {field} * account_id : VARCHAR(32)  <<FK>>
+  {field} previous_status : VARCHAR(16)
+  {field} * new_status : VARCHAR(16)
+  {field} change_reason : VARCHAR(255)
+  {field} operator_identity_id : VARCHAR(64)
+  {field} * created_at : DATETIME
+  {field} * updated_at : DATETIME
+  {field} * version : INT UNSIGNED
+}
+
+entity "交易表\ntransaction" as transaction {
+  {field} * id : BIGINT UNSIGNED  <<PK>>
+  {field} * trade_no : VARCHAR(32)  <<U1>>
+  {field} * identity_id : VARCHAR(64)  <<U2>>
+  {field} * business_type : VARCHAR(24)  <<U2>>
+  {field} * request_id : VARCHAR(64)  <<U2>>
+  {field} * request_hash : CHAR(64)
+  {field} * account_id : VARCHAR(32)  <<FK>>
+  {field} * amount : DECIMAL(18,2)
+  {field} * currency : CHAR(3)
+  {field} * status : VARCHAR(16)
+  {field} channel_evidence_id : VARCHAR(64)
+  {field} last_channel_result : VARCHAR(32)
+  {field} last_checked_at : DATETIME
+  {field} failure_reason : VARCHAR(255)
+  {field} accepted_at : DATETIME
+  {field} completed_at : DATETIME
+  {field} * created_at : DATETIME
+  {field} * updated_at : DATETIME
+  {field} * version : INT UNSIGNED
+}
+
+entity "资金流水表\ntransaction_flow" as transaction_flow {
+  {field} * id : BIGINT UNSIGNED  <<PK>>
+  {field} * entry_id : VARCHAR(32)  <<U1>>
+  {field} * trade_no : VARCHAR(32)  <<FK, U2>>
+  {field} * account_id : VARCHAR(32)  <<FK, U2>>
+  {field} * entry_role : VARCHAR(24)  <<U2>>
+  {field} * direction : VARCHAR(8)
+  {field} * amount : DECIMAL(18,2)
+  {field} * book_balance_after : DECIMAL(18,2)
+  {field} * created_at : DATETIME
+  {field} * updated_at : DATETIME
+  {field} * version : INT UNSIGNED
+}
+
+entity "转账单表\ntransfer_order" as transfer_order {
+  {field} * id : BIGINT UNSIGNED  <<PK>>
+  {field} * transfer_id : VARCHAR(32)  <<U1>>
+  {field} * trade_no : VARCHAR(32)  <<FK, U2>>
+  {field} * transfer_type : VARCHAR(16)
+  {field} * payer_account_id : VARCHAR(32)  <<FK>>
+  {field} payee_account_id : VARCHAR(32)  <<FK>>
+  {field} external_bank_code : VARCHAR(32)
+  {field} external_payee_ref : VARCHAR(64)
+  {field} * amount : DECIMAL(18,2)
+  {field} * currency : CHAR(3)
+  {field} * clearing_status : VARCHAR(24)
+  {field} * created_at : DATETIME
+  {field} * updated_at : DATETIME
+  {field} * version : INT UNSIGNED
+}
+
+entity "风控规则表\nrisk_rule" as risk_rule {
+  {field} * id : BIGINT UNSIGNED  <<PK>>
+  {field} * rule_id : VARCHAR(32)  <<U1>>
+  {field} * rule_type : VARCHAR(24)
+  {field} deposit_single_limit : DECIMAL(18,2)
+  {field} outgoing_single_limit : DECIMAL(18,2)
+  {field} outgoing_daily_limit : DECIMAL(18,2)
+  {field} * enabled : TINYINT(1)
+  {field} * rule_version : INT
+  {field} * created_at : DATETIME
+  {field} * updated_at : DATETIME
+  {field} * version : INT UNSIGNED
+}
+
+entity "风险事件表\nrisk_event" as risk_event {
+  {field} * id : BIGINT UNSIGNED  <<PK>>
+  {field} * event_id : VARCHAR(32)  <<U1>>
+  {field} * trade_no : VARCHAR(32)  <<FK>>
+  {field} * rule_id : VARCHAR(32)  <<FK>>
+  {field} * rule_version : INT
+  {field} * operator_identity_id : VARCHAR(64)
+  {field} * reason_code : VARCHAR(32)
+  {field} * result : VARCHAR(16)
+  {field} * created_at : DATETIME
+  {field} * updated_at : DATETIME
+  {field} * version : INT UNSIGNED
+}
+
+entity "审计日志表\naudit_log" as audit_log {
+  {field} * id : BIGINT UNSIGNED  <<PK>>
+  {field} * operator_identity_id : VARCHAR(64)
+  {field} * action : VARCHAR(32)
+  {field} * target_type : VARCHAR(32)
+  {field} target_ref : VARCHAR(64)
+  {field} reason : VARCHAR(255)
+  {field} result : VARCHAR(16)
+  {field} trade_no : VARCHAR(32)
+  {field} ip_address : VARCHAR(45)
+  {field} * created_at : DATETIME
+  {field} * updated_at : DATETIME
+  {field} * version : INT UNSIGNED
+}
+
+customer ||--o{ credential : 拥有凭证
+customer ||--o{ account : 持有账户
+account ||--o{ account_status_log : 状态历史
+account ||-down-o{ transaction : 主账户交易
+transaction ||-left-o{ transaction_flow : 产生流水
+account ||--o{ transaction_flow : 账户流水
+transaction ||-right-o| transfer_order : 转账明细
+account ||--o{ transfer_order : 付款方
+account |o--o{ transfer_order : 收款方（本行）
+transaction ||-down-o{ risk_event : 风险记录
+risk_rule ||--o{ risk_event : 规则命中
+risk_rule -[hidden]right- audit_log
+legend bottom left
+  PK = 主键；FK = 物理外键；U1/U2/U3 = 本表唯一约束（同号字段组成联合唯一键）。
+  字段前 ● 表示 NOT NULL；无 ● 表示可空。 || = 恰好 1；o| = 0 或 1；o{ = 0 到多。
+  关联引用业务唯一键（customer_id / account_id / trade_no / rule_id），不引用自增 id。
+  transaction → transfer_order 为 1 : 0..1：非转账交易没有转账单。
+  payee_account_id 可空：本行转账必须关联账户；跨行转账使用外部收款信息。
+  identity_id / operator_identity_id 属应用层身份引用，不创建 customer 外键。
+  audit_log 独立留存；trade_no / target_ref 为逻辑引用，不创建物理外键。
+  可用余额 = book_balance − reserved_amount，为派生值，不单独落库。
+endlegend
+@enduml
