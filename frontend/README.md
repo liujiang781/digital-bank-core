@@ -86,7 +86,6 @@ npm run build      # 产物 dist/
 
 后端四服务 + 网关由 S1/S2/S3/S4 交付后启动，前端无需改动即可联调。
 
-<<<<<<< HEAD
 ## 与后端联调的前置约定（已按 S2 实际交付对齐）
 
 - 统一响应体：`{ code, message, data, traceId }`；金额字符串两位小数；时间 ISO-8601 东八区。
@@ -97,14 +96,6 @@ npm run build      # 产物 dist/
 - 写操作一律带 `requestId`（UUID v4）；`X-Request-Id` 头如提供须与 JSON 一致。
 - 解冻请求字段：`reason` + `releaseEvidence` + `resolvedRestrictionIds`（来自详情/冻结响应的 `restrictions`）。
 - 账户详情时间字段：`createdAt`；账户服务端口 8082。
-=======
-## 与后端联调的前置约定（已按接口契约 v1.0 对齐）
-
-- 统一响应体：`{ code, message, data, traceId }`；金额字符串两位小数；时间 ISO-8601 东八区。
-- 分页：请求 `page`/`pageSize`，响应 `data.items` + `data.total`。
-- 登录令牌：`Authorization: Bearer <token>`，登录响应 `data.token`。
-- 写操作一律带 `requestId`（UUID v4）。
->>>>>>> origin/main
 - 网关端口默认 8080；如不同，改 `vite.config.js` 的 proxy target。
 
 ## 待办（联调阶段）
