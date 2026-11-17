@@ -96,4 +96,38 @@ class MockChannelServiceTest {
         assertTrue(row.manualReviewRequired());
         assertNull(row.nextCheckAt());
     }
+
+    @Test
+    void failedModeWritesDeclinedReasonAndEvidence() {
+        seedTrade("TRDCH005");
+        channel.setMode(MockChannelService.FAILED);
+        MockChannelService.ChannelRow row = channel.createOrGet("TRDCH005", "ACC_T001",
+                new BigDecimal("100.00"), "CNY");
+        assertEquals(MockChannelService.FAILED, row.result());
+        assertEquals("CHANNEL_DECLINED", row.reasonCode());
+        assertEquals("EVDTRDCH005", row.evidenceId());
+        assertNotNull(row.observedAt());
+    }
+
+    @Test
+    void unknownConvergesToFailedAndNeverFlipsBackToSuccess() {
+        seedTrade("TRDCH006");
+        channel.setMode(MockChannelService.UNKNOWN);
+        channel.createOrGet("TRDCH006", "ACC_T001", new BigDecimal("100.00"), "CNY");
+
+        channel.setMode(MockChannelService.FAILED);
+        MockChannelService.ChannelRow failed = channel.queryForReconcile("TRDCH006");
+        assertEquals(MockChannelService.FAILED, failed.result());
+        assertEquals("CHANNEL_DECLINED", failed.reasonCode());
+
+        channel.setMode(MockChannelService.SUCCESS);
+        assertEquals(MockChannelService.FAILED, channel.queryForReconcile("TRDCH006").result());
+    }
+
+    @Test
+    void invalidModeIsRejectedAndKeepsPreviousValue() {
+        org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,
+                () -> channel.setMode("PENDING"));
+        assertEquals(MockChannelService.SUCCESS, channel.mode());
+    }
 }

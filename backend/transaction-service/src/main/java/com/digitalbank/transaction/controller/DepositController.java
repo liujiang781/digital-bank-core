@@ -29,8 +29,8 @@ public class DepositController {
         Actor actor = access.requireActor(request);
         String requestId = RequestIds.resolve(body.requestId(), request.getHeader("X-Request-Id"));
         String traceId = (String) request.getAttribute(TraceIds.MDC_KEY);
-        TradeView view = service.deposit(actor, body.accountId(), body.amount(), body.purpose(),
-                requestId, traceId);
+        TradeView view = service.deposit(actor, body.accountId(), body.amount(), body.currency(),
+                body.purpose(), requestId, traceId);
         return ApiResponse.success(view, traceId);
     }
 }
