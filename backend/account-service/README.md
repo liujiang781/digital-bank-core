@@ -93,11 +93,14 @@ new Actor(identityId, customerId, roles, accountScope)
 | `POST /internal/v1/postings/deposit-results` | 成功、失败、未知渠道结果 |
 | `POST /internal/v1/postings/deposit-completions` | 存款成功结果的兼容入口 |
 | `GET /internal/v1/postings/{tradeNo}` | 主库读取当前资金状态 |
-| `POST /internal/v1/postings/reserve` | 取款或本行转账逐笔预留 |
+| `POST /internal/v1/postings/reserve` | 取款、本行转账或跨行转账逐笔预留 |
 | `POST /internal/v1/postings/withdrawal-completions` | 消耗预留并完成取款 |
 | `POST /internal/v1/postings/internal-transfers` | 双账户原子记账 |
-| `POST /internal/v1/postings/releases` | 明确本地失败后的逐笔释放 |
-| `POST /internal/v1/postings/failures` | 风控拒绝或明确出账失败 |
+| `POST /internal/v1/postings/external-transfer-results` | 跨行渠道回执，按结果保留预留、扣款或释放 |
+| `POST /internal/v1/postings/releases` | 取款、本行转账明确本地失败后的逐笔释放 |
+| `POST /internal/v1/postings/failures` | 受理前风控拒绝，或取款、本行转账明确本地失败 |
+
+跨行建单、渠道回执、恢复重试和联调步骤见 [S2 与 S3 跨行转账交接](../../docs/03-原型实现/S2-S3跨行转账交接.md)。
 
 S3 先认领 `transaction` 原单，再调用账户侧受理；收到 `PROCESSING` 后才调用模拟渠道。`channelRequestId` 固定为 `CHD` 加 `tradeNo`。所有回执须与原单的账户、金额、币种、类型一致，S2 不从回执创建新交易。
 

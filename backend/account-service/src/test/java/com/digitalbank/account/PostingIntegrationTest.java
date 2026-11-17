@@ -11,6 +11,7 @@ import com.digitalbank.common.api.ErrorCode;
 import com.digitalbank.common.exception.BizException;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -28,6 +29,7 @@ import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.ResultActions;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -42,6 +44,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 class PostingIntegrationTest {
+    private static final String INTERNAL_TOKEN = "s2-test-service-token-32-bytes-long";
+    private static final String EXTERNAL_RESULTS = "/internal/v1/postings/external-transfer-results";
+
     @Autowired PostingService postings;
     @Autowired JdbcTemplate jdbc;
     @Autowired MockMvc mvc;
@@ -473,6 +478,219 @@ class PostingIntegrationTest {
                 .andExpect(status().isBadRequest()).andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
     }
 
+    @Test
+    void externalTransferRetainsReservationUntilConfirmationAndDebitsOnlyOnce() throws Exception {
+        String tradeNo = "external-success";
+        externalTransfer(tradeNo, "100.00");
+        internalPost("/internal/v1/accounts/snapshots", """
+                {"identityId":"identity-1","businessType":"EXTERNAL_TRANSFER","payerAccountId":"payer"}
+                """)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.account.accountId").value("payer"))
+                .andExpect(jsonPath("$.data.account.availableBalance").value("500.00"))
+                .andExpect(jsonPath("$.data.payee").doesNotExist());
+        internalPost("/internal/v1/postings/reserve", """
+                {"tradeNo":"external-success","payerAccountId":"payer","amount":"100.00","currency":"CNY"}
+                """)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("PROCESSING"))
+                .andExpect(jsonPath("$.data.reservationStatus").value("RESERVED"));
+
+        String unknown = externalReceipt(tradeNo, "100.00", "UNKNOWN", null, "CHANNEL_TIMEOUT");
+        String success = externalReceipt(tradeNo, "100.00", "SUCCESS", "success-evidence", null);
+        mvc.perform(post(EXTERNAL_RESULTS).contentType("application/json").content(unknown))
+                .andExpect(status().isUnauthorized());
+        assertThat(tradeStatus(tradeNo)).isEqualTo("PROCESSING");
+        internalPost(EXTERNAL_RESULTS, unknown)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("UNKNOWN"))
+                .andExpect(jsonPath("$.data.reservationStatus").value("RESERVED"));
+        assertThat(clearingStatus(tradeNo)).isEqualTo("UNKNOWN");
+        assertMoney("payer", "500.00", "100.00");
+        assertThat(flowCount(tradeNo)).isZero();
+        jdbc.update("UPDATE account SET status = 'FROZEN' WHERE account_id = 'payer'");
+
+        internalPost(EXTERNAL_RESULTS, success)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.reservationStatus").value("CONSUMED"));
+        internalPost(EXTERNAL_RESULTS, success)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("SUCCESS"));
+        internalPost(EXTERNAL_RESULTS, unknown)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("SUCCESS"));
+        internalPost(EXTERNAL_RESULTS, externalReceipt(tradeNo, "100.00", "SUCCESS", "different-proof", null))
+                .andExpect(status().isConflict());
+        internalPost(EXTERNAL_RESULTS, externalReceipt(tradeNo, "100.00", "FAILED", "late-failure", "CHANNEL_DECLINED"))
+                .andExpect(status().isConflict());
+
+        assertThat(clearingStatus(tradeNo)).isEqualTo("CONFIRMED_SUCCESS");
+        assertThat(jdbc.queryForObject("SELECT channel_evidence_id FROM `transaction` WHERE trade_no = ?",
+                String.class, tradeNo)).isEqualTo("success-evidence");
+        assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM audit_log WHERE trade_no = ? AND `action` = 'CHANNEL_CONFLICT'",
+                Long.class, tradeNo)).isEqualTo(2);
+        assertMoney("payer", "400.00", "0.00");
+        assertMoney("payee", "20.00", "0.00");
+        assertThat(flowCount(tradeNo)).isEqualTo(1);
+        var entry = jdbc.queryForMap("SELECT account_id, entry_role, direction, amount, book_balance_after "
+                + "FROM transaction_flow WHERE trade_no = ?", tradeNo);
+        assertThat(entry).containsEntry("account_id", "payer")
+                .containsEntry("entry_role", "TRANSFER_OUT").containsEntry("direction", "DEBIT");
+        assertThat((BigDecimal) entry.get("amount")).isEqualByComparingTo("100.00");
+        assertThat((BigDecimal) entry.get("book_balance_after")).isEqualByComparingTo("400.00");
+    }
+
+    @Test
+    void confirmedExternalSuccessSurvivesLocalDebitRollbackAndCanBeRetried() throws Exception {
+        String tradeNo = "external-debit-rollback";
+        externalTransfer(tradeNo, "100.00");
+        postings.reserve(outgoingCommand(tradeNo, "100.00", null));
+        String success = externalReceipt(tradeNo, "100.00", "SUCCESS", "success-proof", null);
+        jdbc.execute("ALTER TABLE transaction_flow ADD CONSTRAINT test_block_external_debit "
+                + "CHECK (entry_role <> 'TRANSFER_OUT')");
+        try {
+            internalPost(EXTERNAL_RESULTS, success).andExpect(status().isInternalServerError());
+        } finally {
+            dropCheckConstraint("transaction_flow", "test_block_external_debit");
+        }
+        assertThat(clearingStatus(tradeNo)).isEqualTo("CONFIRMED_SUCCESS");
+        assertThat(jdbc.queryForObject("SELECT channel_evidence_id FROM `transaction` WHERE trade_no = ?",
+                String.class, tradeNo)).isEqualTo("success-proof");
+        assertThat(postings.outcome(tradeNo).status()).isEqualTo("PROCESSING");
+        assertThat(postings.outcome(tradeNo).reservationStatus()).isEqualTo("RESERVED");
+        assertMoney("payer", "500.00", "100.00");
+        assertThat(flowCount(tradeNo)).isZero();
+
+        internalPost(EXTERNAL_RESULTS, externalReceipt(tradeNo, "100.00", "FAILED", "different-proof", "CHANNEL_DECLINED"))
+                .andExpect(status().isConflict());
+        internalPost(EXTERNAL_RESULTS, externalReceipt(tradeNo, "100.00", "UNKNOWN", null, "CHANNEL_TIMEOUT"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("PROCESSING"));
+        assertThat(clearingStatus(tradeNo)).isEqualTo("CONFIRMED_SUCCESS");
+        internalPost(EXTERNAL_RESULTS, success)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("SUCCESS"))
+                .andExpect(jsonPath("$.data.reservationStatus").value("CONSUMED"));
+        assertMoney("payer", "400.00", "0.00");
+        assertThat(flowCount(tradeNo)).isEqualTo(1);
+    }
+
+    @Test
+    void externalFailureKeepsEvidenceAndReservationWhenReleaseRollsBack() throws Exception {
+        String tradeNo = "external-failure";
+        externalTransfer(tradeNo, "100.00");
+        postings.reserve(outgoingCommand(tradeNo, "100.00", null));
+        String failure = externalReceipt(tradeNo, "100.00", "FAILED", "failure-evidence", "CHANNEL_DECLINED");
+        jdbc.execute("ALTER TABLE account_reservation ADD CONSTRAINT test_block_external_release "
+                + "CHECK (status <> 'RELEASED')");
+        try {
+            internalPost(EXTERNAL_RESULTS, failure).andExpect(status().isInternalServerError());
+        } finally {
+            dropCheckConstraint("account_reservation", "test_block_external_release");
+        }
+        mvc.perform(get("/internal/v1/postings/{tradeNo}", tradeNo).header("X-Internal-Token", INTERNAL_TOKEN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("RECOVERING"))
+                .andExpect(jsonPath("$.data.reservationStatus").value("RESERVED"))
+                .andExpect(jsonPath("$.data.reasonCode").value("CHANNEL_DECLINED"));
+        assertThat(clearingStatus(tradeNo)).isEqualTo("CONFIRMED_FAILURE");
+        assertThat(jdbc.queryForObject("SELECT channel_evidence_id FROM `transaction` WHERE trade_no = ?",
+                String.class, tradeNo)).isEqualTo("failure-evidence");
+        assertMoney("payer", "500.00", "100.00");
+        assertThat(flowCount(tradeNo)).isZero();
+
+        internalPost(EXTERNAL_RESULTS, externalReceipt(tradeNo, "100.00", "UNKNOWN", null, "CHANNEL_TIMEOUT"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("RECOVERING"));
+        internalPost(EXTERNAL_RESULTS, externalReceipt(tradeNo, "100.00", "SUCCESS", "conflicting-proof", null))
+                .andExpect(status().isConflict());
+        internalPost(EXTERNAL_RESULTS, failure)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("FAILED"))
+                .andExpect(jsonPath("$.data.reservationStatus").value("RELEASED"));
+        internalPost(EXTERNAL_RESULTS, failure)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("FAILED"));
+        assertMoney("payer", "500.00", "0.00");
+        assertThat(flowCount(tradeNo)).isZero();
+    }
+
+    @Test
+    void externalTransferChecksOriginalOrderAndRejectsSettlementWithoutReservation() throws Exception {
+        String tradeNo = "external-validation";
+        externalTransfer(tradeNo, "100.00");
+        String result = externalReceipt(tradeNo, "100.00", "SUCCESS", "external-proof", null);
+        internalPost(EXTERNAL_RESULTS, result).andExpect(status().isConflict());
+        assertThat(tradeStatus(tradeNo)).isEqualTo("ACCEPTED");
+        assertMoney("payer", "500.00", "0.00");
+
+        jdbc.update("UPDATE transfer_order SET amount = 99.00 WHERE trade_no = ?", tradeNo);
+        assertError(ErrorCode.REQUEST_CONFLICT, () -> postings.reserve(outgoingCommand(tradeNo, "100.00", null)));
+        jdbc.update("UPDATE transfer_order SET amount = 100.00 WHERE trade_no = ?", tradeNo);
+        postings.reserve(outgoingCommand(tradeNo, "100.00", null));
+        internalPost(EXTERNAL_RESULTS, externalReceipt(tradeNo, "110.00", "SUCCESS", "external-proof", null))
+                .andExpect(status().isConflict());
+        internalPost(EXTERNAL_RESULTS, externalReceipt(tradeNo, "100.00", "FAILED", "timeout-proof", "CHANNEL_TIMEOUT"))
+                .andExpect(status().isBadRequest());
+        internalPost(EXTERNAL_RESULTS, result.replace("+08:00", "Z"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("INVALID_ARGUMENT"));
+        assertThatThrownBy(() -> postings.release(new Release(tradeNo, "payer", "100.00", "CNY",
+                "LOCAL_PROCESSING_FAILED", "LOCAL_FAILURE", "local-proof"))).isInstanceOf(BizException.class);
+        assertThatThrownBy(() -> postings.recordFailure(new Failure(tradeNo, "FAILED",
+                "LOCAL_PROCESSING_FAILED", "LOCAL_FAILURE", "local-proof"))).isInstanceOf(BizException.class);
+        assertThat(tradeStatus(tradeNo)).isEqualTo("PROCESSING");
+        assertThat(clearingStatus(tradeNo)).isEqualTo("SUBMITTED");
+        assertMoney("payer", "500.00", "100.00");
+        assertThat(flowCount(tradeNo)).isZero();
+    }
+
+    @Test
+    void externalReservationAndSuccessBothUseSameDailyOutgoingLimit() throws Exception {
+        jdbc.update("INSERT INTO risk_rule (rule_id, rule_type, deposit_single_limit, outgoing_single_limit, "
+                + "outgoing_daily_limit, enabled, rule_version) VALUES "
+                + "('daily-policy', 'LIMIT_POLICY', 50000.00, 1000.00, 150.00, 1, 1)");
+        String tradeNo = "external-daily";
+        externalTransfer(tradeNo, "100.00");
+        assertThat(postings.reserve(outgoingCommand(tradeNo, "100.00", null)).status()).isEqualTo("PROCESSING");
+
+        withdrawal("during-reservation", "60.00");
+        assertThat(postings.reserve(outgoingCommand("during-reservation", "60.00", null)).reasonCode())
+                .isEqualTo("DAILY_LIMIT_EXCEEDED");
+        internalPost(EXTERNAL_RESULTS, externalReceipt(tradeNo, "100.00", "SUCCESS", "daily-proof", null))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("SUCCESS"));
+        withdrawal("after-consumption", "60.00");
+        assertThat(postings.reserve(outgoingCommand("after-consumption", "60.00", null)).reasonCode())
+                .isEqualTo("DAILY_LIMIT_EXCEEDED");
+        assertMoney("payer", "400.00", "0.00");
+    }
+
+    private ResultActions internalPost(String path, String body) throws Exception {
+        return mvc.perform(post(path).header("X-Internal-Token", INTERNAL_TOKEN)
+                .contentType("application/json").content(body));
+    }
+
+    private String externalReceipt(String tradeNo, String amount, String result, String evidenceId, String reasonCode) {
+        return """
+                {"tradeNo":"%s","payerAccountId":"payer","amount":"%s","currency":"CNY",
+                 "result":"%s","channelRequestId":"CHD%s","evidenceId":%s,"observedAt":"%s","reasonCode":%s}
+                """.formatted(tradeNo, amount, result, tradeNo, evidenceId == null ? "null" : "\"" + evidenceId + "\"",
+                OffsetDateTime.now(ZoneOffset.ofHours(8)), reasonCode == null ? "null" : "\"" + reasonCode + "\"");
+    }
+
+    private String clearingStatus(String tradeNo) {
+        return jdbc.queryForObject("SELECT clearing_status FROM transfer_order WHERE trade_no = ?", String.class, tradeNo);
+    }
+
+    private void dropCheckConstraint(String table, String constraint) {
+        String product = jdbc.execute((ConnectionCallback<String>) connection ->
+                connection.getMetaData().getDatabaseProductName());
+        String dropType = "MySQL".equals(product) ? "CHECK" : "CONSTRAINT";
+        jdbc.execute("ALTER TABLE " + table + " DROP " + dropType + " " + constraint);
+    }
+
     private void customer(String customerId, String identityId) {
         jdbc.update("INSERT INTO customer (customer_id, identity_id, name, real_name_status, status) "
                 + "VALUES (?, ?, 'Test customer', 'VERIFIED', 'NORMAL')", customerId, identityId);
@@ -491,6 +709,14 @@ class PostingIntegrationTest {
         jdbc.update("INSERT INTO transfer_order (transfer_id, trade_no, transfer_type, payer_account_id, "
                         + "payee_account_id, amount, currency, clearing_status) "
                         + "VALUES (?, ?, 'INTERNAL', 'payer', 'payee', ?, 'CNY', 'NOT_APPLICABLE')",
+                "transfer-" + UUID.randomUUID().toString().substring(0, 12), tradeNo, new BigDecimal(amount));
+    }
+
+    private void externalTransfer(String tradeNo, String amount) {
+        trade(tradeNo, "EXTERNAL_TRANSFER", amount);
+        jdbc.update("INSERT INTO transfer_order (transfer_id, trade_no, transfer_type, payer_account_id, "
+                        + "external_bank_code, external_payee_ref, amount, currency, clearing_status) "
+                        + "VALUES (?, ?, 'EXTERNAL', 'payer', 'TESTBANK', 'masked-ref-1234', ?, 'CNY', 'SUBMITTED')",
                 "transfer-" + UUID.randomUUID().toString().substring(0, 12), tradeNo, new BigDecimal(amount));
     }
 

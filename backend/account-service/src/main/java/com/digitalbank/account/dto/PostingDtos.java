@@ -1,6 +1,7 @@
 package com.digitalbank.account.dto;
 
 import com.digitalbank.account.support.AmountStringDeserializer;
+import com.fasterxml.jackson.annotation.JsonFormat;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import java.time.OffsetDateTime;
 
@@ -14,6 +15,12 @@ public final class PostingDtos {
     public record DepositResult(String tradeNo, String accountId,
             @JsonDeserialize(using = AmountStringDeserializer.class) String amount, String currency,
             String result, String channelRequestId, String evidenceId,
+            OffsetDateTime observedAt, String reasonCode) { }
+
+    public record ExternalTransferResult(String tradeNo, String payerAccountId,
+            @JsonDeserialize(using = AmountStringDeserializer.class) String amount, String currency,
+            String result, String channelRequestId, String evidenceId,
+            @JsonFormat(without = JsonFormat.Feature.ADJUST_DATES_TO_CONTEXT_TIME_ZONE)
             OffsetDateTime observedAt, String reasonCode) { }
 
     public record Failure(String tradeNo, String decision, String reasonCode,
