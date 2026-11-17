@@ -51,3 +51,24 @@ CREATE TABLE IF NOT EXISTS mock_channel_deposit (
     CONSTRAINT fk_channel_trade FOREIGN KEY (trade_no) REFERENCES `transaction`(trade_no),
     CONSTRAINT fk_channel_account FOREIGN KEY (account_id) REFERENCES account(account_id)
 );
+
+CREATE TABLE IF NOT EXISTS transfer_order (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    transfer_id VARCHAR(32) NOT NULL,
+    trade_no VARCHAR(32) NOT NULL,
+    transfer_type VARCHAR(16) NOT NULL,
+    payer_account_id VARCHAR(32) NOT NULL,
+    payee_account_id VARCHAR(32),
+    external_bank_code VARCHAR(32),
+    external_payee_ref VARCHAR(64),
+    amount DECIMAL(18,2) NOT NULL,
+    currency CHAR(3) NOT NULL DEFAULT 'CNY',
+    clearing_status VARCHAR(24) NOT NULL DEFAULT 'NOT_APPLICABLE',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_transfer_order_transfer_id UNIQUE (transfer_id),
+    CONSTRAINT uk_transfer_order_trade_no UNIQUE (trade_no),
+    CONSTRAINT fk_transfer_order_transaction FOREIGN KEY (trade_no) REFERENCES `transaction`(trade_no),
+    CONSTRAINT fk_transfer_order_payer FOREIGN KEY (payer_account_id) REFERENCES account(account_id),
+    CONSTRAINT fk_transfer_order_payee FOREIGN KEY (payee_account_id) REFERENCES account(account_id)
+);

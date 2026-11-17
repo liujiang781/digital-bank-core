@@ -68,6 +68,8 @@ public class TradeQueryService {
         if (page < 1) throw new BizException(ErrorCode.INVALID_ARGUMENT, "page 从 1 开始");
         if (pageSize < 1 || pageSize > 100) throw new BizException(ErrorCode.INVALID_ARGUMENT, "pageSize 取值 1-100");
         if (businessType != null && businessType.isBlank()) businessType = null;
+        // 前端沿用旧响应口径时会传 SUCCEEDED；查询层映射为 7 态字面量 SUCCESS，库内字面量不变
+        if ("SUCCEEDED".equals(status)) status = "SUCCESS";
         if (status != null && !STATUSES.contains(status)) {
             throw new BizException(ErrorCode.INVALID_ARGUMENT, "status 不是合法的交易状态");
         }

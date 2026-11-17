@@ -8,6 +8,7 @@ import com.digitalbank.transaction.dto.TransactionDtos.Command;
 import com.digitalbank.transaction.dto.TransactionDtos.DepositResult;
 import com.digitalbank.transaction.dto.TransactionDtos.Failure;
 import com.digitalbank.transaction.dto.TransactionDtos.Outcome;
+import com.digitalbank.transaction.dto.TransactionDtos.Release;
 import com.digitalbank.transaction.dto.TransactionDtos.Snapshot;
 import com.digitalbank.transaction.dto.TransactionDtos.SnapshotRequest;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -70,6 +71,26 @@ public class AccountClient {
     /** 受理前拒绝（风险拒绝，evidenceType=RISK_EVENT）。 */
     public Outcome recordFailure(Failure failure, String tradeNo, String traceId) {
         return sendCommand("/internal/v1/postings/failures", failure, tradeNo, traceId);
+    }
+
+    /** 出账预留（取款/本行转账第一步资金动作）：重复相同预留返回当前状态，不重复占用。 */
+    public Outcome reserve(Command command, String tradeNo, String traceId) {
+        return sendCommand("/internal/v1/postings/reserve", command, tradeNo, traceId);
+    }
+
+    /** 取款提交：消耗原预留，B/R 同减并追加 WITHDRAW_OUT 流水，置 SUCCESS。 */
+    public Outcome withdrawalCompletion(Command command, String tradeNo, String traceId) {
+        return sendCommand("/internal/v1/postings/withdrawal-completions", command, tradeNo, traceId);
+    }
+
+    /** 本行转账提交：消耗原预留，付款与收款记账及双方流水同事务提交，置 SUCCESS。 */
+    public Outcome internalTransfer(Command command, String tradeNo, String traceId) {
+        return sendCommand("/internal/v1/postings/internal-transfers", command, tradeNo, traceId);
+    }
+
+    /** 按明确本地失败依据释放原交易预留（evidenceType 固定 LOCAL_FAILURE；超时或未知不得作为释放依据）。 */
+    public Outcome release(Release release, String tradeNo, String traceId) {
+        return sendCommand("/internal/v1/postings/releases", release, tradeNo, traceId);
     }
 
     /** 主库读取当前资金状态；查询失败由调用方按可查询提示降级。 */
