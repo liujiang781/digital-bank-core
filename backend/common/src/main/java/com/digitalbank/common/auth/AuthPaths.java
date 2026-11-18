@@ -16,7 +16,8 @@ public final class AuthPaths {
 
     // 白名单精确匹配路径和方法，避免把整个 /auth/** 意外开放。
     public static boolean isPublic(String method, String path) {
-        if ("POST".equals(method) && "/api/v1/auth/login".equals(path)) {
+        if ("POST".equals(method) && ("/api/v1/auth/login".equals(path)
+                || "/api/v1/auth/register".equals(path))) {
             return true;
         }
         boolean readOnly = "GET".equals(method) || "HEAD".equals(method);

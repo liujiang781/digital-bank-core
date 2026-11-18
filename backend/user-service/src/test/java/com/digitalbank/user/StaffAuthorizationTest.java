@@ -79,7 +79,7 @@ class StaffAuthorizationTest {
 
     @Test
     void unknownRoleAndScopeWithoutRoleAreRejected() {
-        assertThatThrownBy(() -> new StaffAuthorizationProperties.Grant(Set.of("ADMIN"), Set.of()))
+        assertThatThrownBy(() -> new StaffAuthorizationProperties.Grant(Set.of("OWNER"), Set.of()))
                 .isInstanceOf(IllegalArgumentException.class);
         assertThatThrownBy(() -> new StaffAuthorizationProperties.Grant(Set.of(), Set.of("account-1")))
                 .isInstanceOf(IllegalArgumentException.class);

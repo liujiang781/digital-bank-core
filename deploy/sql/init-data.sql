@@ -1,6 +1,9 @@
 SET NAMES utf8mb4;
 USE payment_db;
 
+DELETE FROM staff_account_scope;
+DELETE FROM staff_authorization;
+DELETE FROM user_command;
 DELETE FROM mock_channel_deposit;
 DELETE FROM audit_log;
 DELETE FROM account_command;

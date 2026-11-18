@@ -21,7 +21,9 @@ import com.digitalbank.transaction.dto.TransactionDtos.Command;
 import com.digitalbank.transaction.dto.TransactionDtos.DepositResult;
 import com.digitalbank.transaction.dto.TransactionDtos.Outcome;
 import com.digitalbank.transaction.dto.TransactionDtos.Snapshot;
-import com.digitalbank.transaction.security.Actor;
+import com.digitalbank.common.auth.AuthTokens;
+import com.digitalbank.common.auth.SessionIdentity;
+import com.digitalbank.common.auth.SessionVerifier;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
@@ -47,6 +49,8 @@ class DepositApiTest {
     private static final String IDENTITY = "identity-s3-api";
     private static final String ACCOUNT = "ACC_S3_API";
     private static final String REQUEST = "12345678-1234-4234-8234-123456789abc";
+    private static final String TOKEN = "a".repeat(43);
+    private static final String OTHER_TOKEN = "b".repeat(43);
 
     @Autowired
     private MockMvc mockMvc;
@@ -62,8 +66,18 @@ class DepositApiTest {
     @MockitoBean
     private RiskClient risk;
 
+    @MockitoBean
+    private SessionVerifier sessionVerifier;
+
     @BeforeEach
     void resetData() {
+        // 仅替换远程 S1 调用，保留真实认证过滤器，不能靠手工 Principal 绕过 Bearer 校验。
+        when(sessionVerifier.verify(any(), any())).thenAnswer(invocation -> {
+            String token = invocation.getArgument(0);
+            if (TOKEN.equals(token)) return new SessionIdentity("customer-s3", IDENTITY);
+            if (OTHER_TOKEN.equals(token)) return new SessionIdentity("customer-other", "identity-other");
+            throw AuthTokens.unauthenticated();
+        });
         jdbc.update("DELETE FROM transfer_order");
         jdbc.update("DELETE FROM mock_channel_deposit");
         jdbc.update("DELETE FROM `transaction`");
@@ -108,7 +122,7 @@ class DepositApiTest {
 
     private MvcResult deposit(String amount, String currency, String requestId) throws Exception {
         return mockMvc.perform(post("/api/v1/deposits")
-                        .principal(new Actor(IDENTITY))
+                        .header("Authorization", "Bearer " + TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body(amount, currency, requestId)))
                 .andReturn();
@@ -129,7 +143,7 @@ class DepositApiTest {
                 .path("data").path("status").asText());
 
         mockMvc.perform(get("/api/v1/transactions/{tradeNo}", tradeNo(result))
-                        .principal(new Actor(IDENTITY)))
+                        .header("Authorization", "Bearer " + TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.businessType").value("DEPOSIT"))
@@ -155,7 +169,7 @@ class DepositApiTest {
 
         assertEquals(200, deposit("100.00", "CNY", REQUEST).getResponse().getStatus());
         mockMvc.perform(post("/api/v1/deposits")
-                        .principal(new Actor(IDENTITY))
+                        .header("Authorization", "Bearer " + TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body("200.00", "CNY", REQUEST)))
                 .andExpect(status().isConflict())
@@ -165,7 +179,7 @@ class DepositApiTest {
     @Test
     void invalidAmountReturns400BeforeAnyClaim() throws Exception {
         mockMvc.perform(post("/api/v1/deposits")
-                        .principal(new Actor(IDENTITY))
+                        .header("Authorization", "Bearer " + TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body("0", "CNY", REQUEST)))
                 .andExpect(status().isBadRequest())
@@ -176,7 +190,7 @@ class DepositApiTest {
     @Test
     void missingRequestIdReturns400() throws Exception {
         mockMvc.perform(post("/api/v1/deposits")
-                        .principal(new Actor(IDENTITY))
+                        .header("Authorization", "Bearer " + TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"accountId":"%s","amount":"100.00","currency":"CNY"}
@@ -188,7 +202,7 @@ class DepositApiTest {
     @Test
     void nonCnyReturns400BeforeAnyClaim() throws Exception {
         mockMvc.perform(post("/api/v1/deposits")
-                        .principal(new Actor(IDENTITY))
+                        .header("Authorization", "Bearer " + TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body("100.00", "USD", REQUEST)))
                 .andExpect(status().isBadRequest())
@@ -218,7 +232,7 @@ class DepositApiTest {
         });
 
         mockMvc.perform(post("/api/v1/deposits")
-                        .principal(new Actor(IDENTITY))
+                        .header("Authorization", "Bearer " + TOKEN)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(body("50000.01", "CNY", REQUEST)))
                 .andExpect(status().isUnprocessableEntity())
@@ -247,7 +261,7 @@ class DepositApiTest {
         MvcResult result = deposit("100.00", "CNY", REQUEST);
 
         mockMvc.perform(get("/api/v1/transactions/{tradeNo}", tradeNo(result))
-                        .principal(new Actor("identity-other")))
+                        .header("Authorization", "Bearer " + OTHER_TOKEN))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("TRADE_NOT_FOUND"));
     }
@@ -262,7 +276,7 @@ class DepositApiTest {
                         .param("status", "SUCCEEDED")
                         .param("page", "1")
                         .param("pageSize", "20")
-                        .principal(new Actor(IDENTITY)))
+                        .header("Authorization", "Bearer " + TOKEN))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.total").value(1))
                 .andExpect(jsonPath("$.data.items[0].status").value("SUCCESS"));

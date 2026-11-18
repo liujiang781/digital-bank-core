@@ -43,3 +43,23 @@ export function getMe() {
 export function updateMe(payload) {
   return http.put('/customers/me', payload)
 }
+
+/** 本人资料；与 getMe() 的会话身份查询分开。 */
+export function getProfile() {
+  return http.get('/customers/me')
+}
+
+/** 运营客户列表，params 必须包含 reason，范围由服务端会话决定。 */
+export function listCustomers(params) {
+  return http.get('/customers', { params })
+}
+
+/** 管理员查询目标身份的业务角色与账户范围。 */
+export function getAuthorization(identityId) {
+  return http.get('/roles', { params: { identityId } })
+}
+
+/** 管理员替换/撤销授权；payload 包含 identityId、enabled、accountScope、reason、requestId。 */
+export function updateAuthorization(roleId, payload) {
+  return http.put(`/roles/${encodeURIComponent(roleId)}`, payload)
+}
