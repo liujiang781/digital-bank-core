@@ -29,6 +29,7 @@ auth:
     identity-id: ${BANK_DEMO_IDENTITY:demo-user}
     password: ${BANK_DEMO_PASSWORD:}
   database:
+    driver-class-name: ${BANK_DB_DRIVER:com.mysql.cj.jdbc.Driver}
     url: ${BANK_DB_URL:jdbc:mysql://localhost:3306/payment_db?serverTimezone=Asia/Shanghai&characterEncoding=UTF-8}
     username: ${BANK_DB_USERNAME:bank_user}
     password: ${BANK_DB_PASSWORD:}

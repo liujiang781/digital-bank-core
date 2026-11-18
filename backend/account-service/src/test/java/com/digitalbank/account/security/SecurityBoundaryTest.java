@@ -66,6 +66,14 @@ class SecurityBoundaryTest {
     }
 
     @Test
+    void administratorCannotEnterAccountBusinessFunctions() {
+        var request = new MockHttpServletRequest();
+        request.setUserPrincipal(new SessionIdentity("customer-1", "identity-1", Set.of("ADMIN"), Set.of()));
+        request.addUserRole("ADMIN");
+        assertError(ErrorCode.FORBIDDEN, () -> access.requireActor(request));
+    }
+
+    @Test
     void customerAuthenticationRequiresNormalVerifiedRecord() {
         var request = new MockHttpServletRequest();
         request.setUserPrincipal((Principal) () -> "identity-1");

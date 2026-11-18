@@ -122,13 +122,13 @@ python scripts/smoke.py
 | `/api/v1/deposits/**`、`/api/v1/withdrawals/**`、`/api/v1/transfers/**`、`/api/v1/transactions/**` | transaction-service |
 | `/api/v1/risk/**` | risk-service |
 
-登录、退出、当前会话查询已经实现；其余未实现接口在通过认证后返回 404。
+登录、退出、当前会话、注册与模拟实名、本人资料、运营客户列表和管理员授权接口已经实现。新增用户管理接口需要 MySQL 凭据模式及 S1 增量表，详见 [S1 用户管理接口交接](../docs/04-测试报告/s1/S1-用户管理接口交接.md)。
 账户路径已有 S2 业务 Controller（开户/余额/冻结/流水等），其余模块按各负责人进度接入。
 `/internal/v1/**` 不经网关开放。内部会话核验要求服务密钥，业务记账内部接口的认证仍由对应模块实现。
 Servlet 用户鉴权过滤器跳过 `/internal/v1/` 下的接口：S2/S3 校验 `X-Internal-Token`，
 S1 会话核验接口校验 `X-Service-Token`。跳过用户鉴权不代表跳过服务身份校验。
 用户会话核验成功后，`getUserPrincipal().getName()` 和 `getRemoteUser()` 返回 `identityId`，
-同时保留 `AccessService` 请求属性。会话包含 `roles`、`accountScope`，默认均为空；运营/风控授权由用户服务的 `auth.staff.grants` 服务端清单明确配置，S2 同时核验角色和具体账户范围。配置与验证见 [S1→S2 运营授权交接](../docs/04-测试报告/s1/S1-S2运营授权交接.md)。
+同时保留 `AccessService` 请求属性。会话包含 `roles`、`accountScope` 和 `authorizationVersion`；在线授权记录优先于静态清单，变更后旧会话失效。ADMIN 仅由服务端预置，只管理权限，不访问业务数据；S2 同时核验业务角色和具体账户范围。配置与验证见 [S1 用户管理接口交接](../docs/04-测试报告/s1/S1-用户管理接口交接.md)。
 前端开发建议由 Vite 将 `/api` 代理到 `http://localhost:8080`。
 
 实现以实验二 `s5接口契约与交付整合/02-设计文档/服务边界与接口清单.md` 为准：

@@ -18,8 +18,11 @@ public record StaffAuthorizationProperties(Map<String, Grant> grants) {
         public Grant {
             roles = roles == null ? Set.of() : Set.copyOf(roles);
             accountScope = accountScope == null ? Set.of() : Set.copyOf(accountScope);
-            if (!Set.of("OPERATIONS", "RISK").containsAll(roles)) {
-                throw new IllegalArgumentException("后台角色仅支持 OPERATIONS / RISK");
+            if (!Set.of("OPERATIONS", "RISK", "ADMIN").containsAll(roles)) {
+                throw new IllegalArgumentException("后台角色仅支持 OPERATIONS / RISK / ADMIN");
+            }
+            if (roles.contains("ADMIN") && (roles.size() != 1 || !accountScope.isEmpty())) {
+                throw new IllegalArgumentException("管理员只能管理授权，不能同时配置业务角色或账户范围");
             }
             if (accountScope.stream().anyMatch(id -> id.isBlank() || id.contains("*") || id.length() > 32)) {
                 throw new IllegalArgumentException("账户范围必须为明确的账户业务标识，不能使用通配符");

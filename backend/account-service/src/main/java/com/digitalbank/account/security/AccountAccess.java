@@ -19,6 +19,9 @@ public class AccountAccess {
     public Actor requireActor(HttpServletRequest request) {
         Principal principal = request.getUserPrincipal();
         if (principal == null) throw unauthenticated();
+        if (request.isUserInRole("ADMIN")) {
+            throw new BizException(ErrorCode.FORBIDDEN, "管理员不能访问账户业务数据");
+        }
         if (principal instanceof Actor actor) return actor;
         if (principal.getName() == null || principal.getName().isBlank()) throw unauthenticated();
 

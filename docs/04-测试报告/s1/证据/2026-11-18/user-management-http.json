@@ -1,0 +1,575 @@
+{
+  "executedAt": "2026-11-18T19:39:12.505428+08:00",
+  "database": "isolated H2 TCP, MySQL mode",
+  "services": [
+    "user-service",
+    "account-service",
+    "gateway"
+  ],
+  "passed": true,
+  "total": 29,
+  "cases": [
+    {
+      "name": "register-new-user-1",
+      "method": "POST",
+      "path": "/api/v1/auth/register",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "customerId": "CUS08a3ba89521b4765871ae96fdaf1a",
+          "realNameStatus": "VERIFIED"
+        },
+        "traceId": "user-management-001"
+      }
+    },
+    {
+      "name": "register-replay",
+      "method": "POST",
+      "path": "/api/v1/auth/register",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "customerId": "CUS08a3ba89521b4765871ae96fdaf1a",
+          "realNameStatus": "VERIFIED"
+        },
+        "traceId": "user-management-002"
+      }
+    },
+    {
+      "name": "register-content-conflict",
+      "method": "POST",
+      "path": "/api/v1/auth/register",
+      "expected": 409,
+      "actual": 409,
+      "passed": true,
+      "response": {
+        "code": "REQUEST_CONFLICT",
+        "message": "请求内容冲突或身份、手机号已被使用",
+        "data": null,
+        "traceId": "user-management-003"
+      }
+    },
+    {
+      "name": "login-new-user-1",
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "token": "[redacted]",
+          "tokenType": "Bearer",
+          "expiresAt": "2026-11-18T12:09:06.521559Z",
+          "customer": {
+            "customerId": "CUS08a3ba89521b4765871ae96fdaf1a",
+            "identityId": "new-user-1",
+            "roles": [],
+            "accountScope": [],
+            "authorizationVersion": 0
+          }
+        },
+        "traceId": "user-management-004"
+      }
+    },
+    {
+      "name": "own-profile",
+      "method": "GET",
+      "path": "/api/v1/customers/me",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "customerId": "CUS08a3ba89521b4765871ae96fdaf1a",
+          "identityId": "ne******-1",
+          "realName": "模拟客户",
+          "realNameStatus": "VERIFIED",
+          "status": "NORMAL",
+          "phone": null,
+          "email": null
+        },
+        "traceId": "user-management-005"
+      }
+    },
+    {
+      "name": "update-contact",
+      "method": "PUT",
+      "path": "/api/v1/customers/me",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "customerId": "CUS08a3ba89521b4765871ae96fdaf1a",
+          "identityId": "ne******-1",
+          "realName": "模拟客户",
+          "realNameStatus": "VERIFIED",
+          "status": "NORMAL",
+          "phone": "13*******78",
+          "email": "me**************om"
+        },
+        "traceId": "user-management-006"
+      }
+    },
+    {
+      "name": "immutable-identity",
+      "method": "PUT",
+      "path": "/api/v1/customers/me",
+      "expected": 400,
+      "actual": 400,
+      "passed": true,
+      "response": {
+        "code": "INVALID_ARGUMENT",
+        "message": "请求参数不合法",
+        "data": null,
+        "traceId": "user-management-007"
+      }
+    },
+    {
+      "name": "open-registered-customer-account",
+      "method": "POST",
+      "path": "/api/v1/accounts",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "accountId": "133c0e19e01a4f82af920d1f87f5ad9f",
+          "currency": "CNY",
+          "status": "ACTIVE",
+          "bookBalance": "0.00",
+          "reservedAmount": "0.00",
+          "availableBalance": "0.00",
+          "personalSingleLimit": null,
+          "personalDailyLimit": null,
+          "createdAt": "2026-11-18T19:39:07.002504+08:00",
+          "restrictions": []
+        },
+        "traceId": "user-management-008"
+      }
+    },
+    {
+      "name": "register-new-user-2",
+      "method": "POST",
+      "path": "/api/v1/auth/register",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "customerId": "CUS0f2aeeb846da4ca4a103f2e89b860",
+          "realNameStatus": "VERIFIED"
+        },
+        "traceId": "user-management-009"
+      }
+    },
+    {
+      "name": "login-new-user-2",
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "token": "[redacted]",
+          "tokenType": "Bearer",
+          "expiresAt": "2026-11-18T12:09:08.358225800Z",
+          "customer": {
+            "customerId": "CUS0f2aeeb846da4ca4a103f2e89b860",
+            "identityId": "new-user-2",
+            "roles": [],
+            "accountScope": [],
+            "authorizationVersion": 0
+          }
+        },
+        "traceId": "user-management-010"
+      }
+    },
+    {
+      "name": "open-second-account",
+      "method": "POST",
+      "path": "/api/v1/accounts",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "accountId": "85831e5383164d0291cfe0200202f4a5",
+          "currency": "CNY",
+          "status": "ACTIVE",
+          "bookBalance": "0.00",
+          "reservedAmount": "0.00",
+          "availableBalance": "0.00",
+          "personalSingleLimit": null,
+          "personalDailyLimit": null,
+          "createdAt": "2026-11-18T19:39:08.472526+08:00",
+          "restrictions": []
+        },
+        "traceId": "user-management-011"
+      }
+    },
+    {
+      "name": "register-bootstrap-fixture",
+      "method": "POST",
+      "path": "/api/v1/auth/register",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "customerId": "CUS85760ebf3c514f95a6f625d43fddc",
+          "realNameStatus": "VERIFIED"
+        },
+        "traceId": "user-management-012"
+      }
+    },
+    {
+      "name": "login-OPS-ADMIN",
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "token": "[redacted]",
+          "tokenType": "Bearer",
+          "expiresAt": "2026-11-18T12:09:10.075343400Z",
+          "customer": {
+            "customerId": "CUS85760ebf3c514f95a6f625d43fddc",
+            "identityId": "OPS-ADMIN",
+            "roles": [
+              "ADMIN"
+            ],
+            "accountScope": [],
+            "authorizationVersion": 0
+          }
+        },
+        "traceId": "user-management-013"
+      }
+    },
+    {
+      "name": "assign-role",
+      "method": "PUT",
+      "path": "/api/v1/roles/OPERATIONS",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "identityId": "new-user-1",
+          "roles": [
+            "OPERATIONS"
+          ],
+          "accountScope": [
+            "133c0e19e01a4f82af920d1f87f5ad9f"
+          ],
+          "authorizationVersion": 1
+        },
+        "traceId": "user-management-014"
+      }
+    },
+    {
+      "name": "old-customer-session-revoked",
+      "method": "GET",
+      "path": "/api/v1/auth/me",
+      "expected": 401,
+      "actual": 401,
+      "passed": true,
+      "response": {
+        "code": "UNAUTHENTICATED",
+        "message": "登录凭证无效或已过期，请重新登录",
+        "data": null,
+        "traceId": "user-management-015"
+      }
+    },
+    {
+      "name": "login-new-user-1",
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "token": "[redacted]",
+          "tokenType": "Bearer",
+          "expiresAt": "2026-11-18T12:09:10.818162500Z",
+          "customer": {
+            "customerId": "CUS08a3ba89521b4765871ae96fdaf1a",
+            "identityId": "new-user-1",
+            "roles": [
+              "OPERATIONS"
+            ],
+            "accountScope": [
+              "133c0e19e01a4f82af920d1f87f5ad9f"
+            ],
+            "authorizationVersion": 1
+          }
+        },
+        "traceId": "user-management-016"
+      }
+    },
+    {
+      "name": "scoped-customers",
+      "method": "GET",
+      "path": "/api/v1/customers?reason=review",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "total": 1,
+          "page": 1,
+          "pageSize": 20,
+          "items": [
+            {
+              "customerId": "CUS08a3ba89521b4765871ae96fdaf1a",
+              "identityId": "ne******-1",
+              "realName": "****",
+              "status": "NORMAL",
+              "accounts": [
+                {
+                  "accountId": "133c0e19e01a4f82af920d1f87f5ad9f",
+                  "status": "ACTIVE"
+                }
+              ]
+            }
+          ]
+        },
+        "traceId": "user-management-017"
+      }
+    },
+    {
+      "name": "missing-query-reason",
+      "method": "GET",
+      "path": "/api/v1/customers",
+      "expected": 400,
+      "actual": 400,
+      "passed": true,
+      "response": {
+        "code": "INVALID_ARGUMENT",
+        "message": "请求参数不合法",
+        "data": null,
+        "traceId": "user-management-018"
+      }
+    },
+    {
+      "name": "forged-operations",
+      "method": "GET",
+      "path": "/api/v1/customers?reason=review",
+      "expected": 403,
+      "actual": 403,
+      "passed": true,
+      "response": {
+        "code": "FORBIDDEN",
+        "message": "没有此功能或数据范围的权限",
+        "data": null,
+        "traceId": "user-management-019"
+      }
+    },
+    {
+      "name": "administrator-cannot-list-customers",
+      "method": "GET",
+      "path": "/api/v1/customers?reason=review",
+      "expected": 403,
+      "actual": 403,
+      "passed": true,
+      "response": {
+        "code": "FORBIDDEN",
+        "message": "没有此功能或数据范围的权限",
+        "data": null,
+        "traceId": "user-management-020"
+      }
+    },
+    {
+      "name": "administrator-cannot-access-accounts",
+      "method": "GET",
+      "path": "/api/v1/accounts/133c0e19e01a4f82af920d1f87f5ad9f",
+      "expected": 403,
+      "actual": 403,
+      "passed": true,
+      "response": {
+        "code": "FORBIDDEN",
+        "message": "管理员不能访问账户业务数据",
+        "data": null,
+        "traceId": "user-management-021"
+      }
+    },
+    {
+      "name": "cannot-promote-admin",
+      "method": "PUT",
+      "path": "/api/v1/roles/ADMIN",
+      "expected": 400,
+      "actual": 400,
+      "passed": true,
+      "response": {
+        "code": "INVALID_ARGUMENT",
+        "message": "在线授权仅支持 OPERATIONS / RISK，管理员由服务端配置",
+        "data": null,
+        "traceId": "user-management-022"
+      }
+    },
+    {
+      "name": "replace-account-scope",
+      "method": "PUT",
+      "path": "/api/v1/roles/OPERATIONS",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "identityId": "new-user-1",
+          "roles": [
+            "OPERATIONS"
+          ],
+          "accountScope": [
+            "85831e5383164d0291cfe0200202f4a5"
+          ],
+          "authorizationVersion": 2
+        },
+        "traceId": "user-management-023"
+      }
+    },
+    {
+      "name": "old-staff-session-revoked",
+      "method": "GET",
+      "path": "/api/v1/auth/me",
+      "expected": 401,
+      "actual": 401,
+      "passed": true,
+      "response": {
+        "code": "UNAUTHENTICATED",
+        "message": "登录凭证无效或已过期，请重新登录",
+        "data": null,
+        "traceId": "user-management-024"
+      }
+    },
+    {
+      "name": "login-new-user-1",
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "token": "[redacted]",
+          "tokenType": "Bearer",
+          "expiresAt": "2026-11-18T12:09:12.094568100Z",
+          "customer": {
+            "customerId": "CUS08a3ba89521b4765871ae96fdaf1a",
+            "identityId": "new-user-1",
+            "roles": [
+              "OPERATIONS"
+            ],
+            "accountScope": [
+              "85831e5383164d0291cfe0200202f4a5"
+            ],
+            "authorizationVersion": 2
+          }
+        },
+        "traceId": "user-management-025"
+      }
+    },
+    {
+      "name": "revoke-role",
+      "method": "PUT",
+      "path": "/api/v1/roles/OPERATIONS",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "identityId": "new-user-1",
+          "roles": [],
+          "accountScope": [],
+          "authorizationVersion": 3
+        },
+        "traceId": "user-management-026"
+      }
+    },
+    {
+      "name": "revoked-role-session-rejected",
+      "method": "GET",
+      "path": "/api/v1/auth/me",
+      "expected": 401,
+      "actual": 401,
+      "passed": true,
+      "response": {
+        "code": "UNAUTHENTICATED",
+        "message": "登录凭证无效或已过期，请重新登录",
+        "data": null,
+        "traceId": "user-management-027"
+      }
+    },
+    {
+      "name": "logout-admin",
+      "method": "POST",
+      "path": "/api/v1/auth/logout",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": null,
+        "traceId": "user-management-028"
+      }
+    },
+    {
+      "name": "logged-out-admin-rejected",
+      "method": "PUT",
+      "path": "/api/v1/roles/OPERATIONS",
+      "expected": 401,
+      "actual": 401,
+      "passed": true,
+      "response": {
+        "code": "UNAUTHENTICATED",
+        "message": "登录凭证无效或已过期，请重新登录",
+        "data": null,
+        "traceId": "user-management-029"
+      }
+    }
+  ]
+}

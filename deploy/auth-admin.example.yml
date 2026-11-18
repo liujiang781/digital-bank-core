@@ -1,0 +1,8 @@
+# 用户服务单独加载；为已存在的管理员身份指定唯一 ADMIN 角色。
+# 对应凭据必须由 S4 预先在 customer/credential 中建立，不提供默认登录口令。
+auth:
+  staff:
+    grants:
+      OPS-ADMIN:
+        roles: [ADMIN]
+        account-scope: []

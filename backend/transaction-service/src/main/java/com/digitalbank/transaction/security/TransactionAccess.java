@@ -10,6 +10,9 @@ import org.springframework.stereotype.Component;
 @Component
 public class TransactionAccess {
     public Actor requireActor(HttpServletRequest request) {
+        if (request.isUserInRole("ADMIN")) {
+            throw new BizException(ErrorCode.FORBIDDEN, "管理员不能访问交易业务数据");
+        }
         Principal principal = request.getUserPrincipal();
         if (principal == null || principal.getName() == null || principal.getName().isBlank()) {
             throw new BizException(ErrorCode.UNAUTHENTICATED, "请先登录或重新认证");

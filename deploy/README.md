@@ -4,7 +4,7 @@
 
 ## 结构与演示数据
 
-schema.sql 当前定义 13 张表、15 条外键；这是静态 DDL 计数，实际数据库结果需执行验证后填写。演示账户为 ACC_S2_001、ACC_S2_002，初始账面余额分别为 50000.00、30000.00。
+schema.sql 当前定义 16 张表、16 条外键（含 S1 新增的用户幂等、在线授权和账户范围三张表）；这是静态 DDL 计数，实际数据库结果需执行验证后填写。演示账户为 ACC_S2_001、ACC_S2_002，初始账面余额分别为 50000.00、30000.00。
 
 | 登录 identityId | 数据库 username | 实验密码 | 对应账户 |
 | --- | --- | --- | --- |
@@ -15,6 +15,8 @@ schema.sql 当前定义 13 张表、15 条外键；这是静态 DDL 计数，实
 登录接口接收 identityId。用户服务使用 BANK_CREDENTIAL_STORE=mysql 与相应 BANK_DB_* 环境变量。演示密码哈希已与当前 BCrypt 编码器一致；demo 模式凭据另由 BANK_DEMO_* 配置，不能混用两种模式的身份。
 
 ## 初始化与启动依赖
+
+已有数据库升级 S1 功能时，只执行 `sql/s1-incremental.sql`，不重跑清空数据的基础脚本。用户服务使用 `BANK_CREDENTIAL_STORE=mysql`；管理员配置样例见 `auth-admin.example.yml`，接口与账号权限见 [S1 新增接口交接](../docs/04-测试报告/s1/S1-用户管理接口交接.md)。
 
 在 deploy 目录执行 docker compose -f docker-compose.dev.yml up -d mysql，确认 MySQL 健康后再启动应用。Redis 是可选 profile，本轮 S1 会话使用进程内存。
 
