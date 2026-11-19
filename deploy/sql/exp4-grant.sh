@@ -43,12 +43,6 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON payment_db.staff_account_scope TO 'bank_
 GRANT SELECT, INSERT ON payment_db.audit_log TO 'bank_user'@'%';
 GRANT SELECT ON payment_db.account TO 'bank_user'@'%';
 
--- MySQL 8.0.13 的锁读（SELECT ... FOR UPDATE）权限检查有缺陷：即使已授予表级 SELECT/UPDATE，
--- 仍会报 ERROR 1143（列级权限拒绝），导致 staff_authorization 的 FOR UPDATE 查询失败、登录返回 503。
--- 下面两行为兼容 8.0.13 追加的列级授权；升级到 8.0.14+ 后可删除。
-GRANT SELECT (identity_id, role_id, version), UPDATE (identity_id, role_id, version) ON payment_db.staff_authorization TO 'bank_user'@'%';
-GRANT SELECT (identity_id, account_id), UPDATE (identity_id, account_id) ON payment_db.staff_account_scope TO 'bank_user'@'%';
-
 GRANT SELECT, INSERT, UPDATE ON payment_db.account TO 'account_service'@'%';
 GRANT SELECT, INSERT, UPDATE ON payment_db.account_command TO 'account_service'@'%';
 GRANT SELECT, INSERT, UPDATE ON payment_db.account_reservation TO 'account_service'@'%';

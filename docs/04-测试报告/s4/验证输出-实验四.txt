@@ -474,3 +474,68 @@ LOGIN UID-000001 -> code=SUCCEEDED token=dRK5R6Sqz7...
   2. readAuthorization 的 SELECT ... FOR UPDATE 建议改为基于 version 字段的乐观锁，
      同时规避锁读性能问题与 8.0.13 权限缺陷。
 
+================================================================================
+第 17 节  MySQL 升级到 8.0.46 后复验（2026-11-19 晚）
+时间：2026-11-19  基线：main@75ddc06 + MySQL 8.0.46
+================================================================================
+
+【环境变更】MySQL Server 8.0.13 -> 8.0.46（MySQL Installer Upgrade，原地升级，
+  数据目录与账号保留；升级后 SELECT VERSION() 返回 8.0.46）。
+  随后重跑 deploy/sql/schema.sql（16 张表重建）与 init-data.sql（演示数据），
+  两条命令均无报错。
+
+【撤销 8.0.13 的列级授权补丁】执行：
+  REVOKE SELECT (identity_id, role_id, version), UPDATE (...) ON payment_db.staff_authorization ...
+  REVOKE SELECT (identity_id, account_id), UPDATE (...) ON payment_db.staff_account_scope ...
+
+  撤销后 bank_user 的 SHOW GRANTS 仅剩 7 条表级授权：
+    GRANT USAGE ON *.*
+    GRANT SELECT ON payment_db.account
+    GRANT SELECT, INSERT ON payment_db.audit_log
+    GRANT SELECT, INSERT, UPDATE ON payment_db.credential
+    GRANT SELECT, INSERT, UPDATE ON payment_db.customer
+    GRANT SELECT, INSERT, UPDATE, DELETE ON payment_db.staff_account_scope
+    GRANT SELECT, INSERT, UPDATE, DELETE ON payment_db.staff_authorization
+    GRANT SELECT, INSERT, UPDATE ON payment_db.user_command
+  information_schema.COLUMN_PRIVILEGES 中 staff_* 已为空。
+
+【探针实测 1：锁读恢复正常】
+  serverVersion=8.0.46
+  SELECT role_id, version FROM staff_authorization WHERE identity_id='UID-000001' FOR UPDATE
+    -> OK（不再报 1143；返回 0 行是因为该用户本来没有角色行，非权限问题）
+  结论：8.0.14 修复的锁读权限缺陷在 8.0.46 上确认不存在，列级补丁不再需要。
+
+【探针实测 2：CHECK 约束真实生效（行为验证，非仅计数）】
+  INSERT INTO customer(customer_id, identity_id, name, status)
+  VALUES ('PROBE6-BAD','PROBE6-BAD','probe','BOGUS');
+    -> CHECK ENFORCED  errorCode=3819  sqlState=HY000
+       Check constraint 'chk_customer_status' is violated.
+  事务回滚后 residual_rows=0，无脏数据。
+  结论：8.0.13 时代“CHECK 被解析后丢弃”的问题随升级消除，DEF-S4-001 关闭。
+  （schema.sql 中共 40 条 CONSTRAINT chk_*，本次已全部随建表入库。）
+
+【health-check.ps1】5/5 PASS，退出码 0
+  [PASS] gateway          200 {"status":"UP"}
+  [PASS] user-service     200 请求成功
+  [PASS] account-service  200 请求成功
+  [PASS] transaction-svc  200 请求成功
+  [PASS] risk-service     200 请求成功
+
+【登录冒烟】POST http://localhost:8085/api/v1/auth/login
+  body: {"identityId":"UID-000001","password":"demo123"}
+  -> {"code":"SUCCEEDED","data":{"token":"qUTO-...","tokenType":"Bearer",
+      "customer":{"customerId":"CUS-0001","identityId":"UID-000001",
+      "roles":[],"accountScope":[],"authorizationVersion":0}}}
+  token 长度 43。
+
+【存款冒烟】POST http://localhost:8085/api/v1/deposits
+  body: {"accountId":"ACC_S2_001","amount":"88.00","currency":"CNY",
+         "purpose":"S4 升级后冒烟","requestId":"<uuid>"}（X-Request-Id 与 requestId 一致）
+  -> {"code":"SUCCEEDED","data":{"tradeNo":"TRD202611198149F4A7","status":"SUCCESS"}}
+  余额查询 GET /api/v1/accounts/ACC_S2_001
+  -> bookBalance 50000.00 -> 50088.00，availableBalance 50088.00
+
+结论：升级 8.0.46 后 13 条验证的关键路径（健康检查 / 登录 / 存款 / 余额）
+  全部通过；DEF-S4-001、DEF-S4-004 均已关闭。
+
+
