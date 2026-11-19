@@ -368,3 +368,24 @@ LOGIN UID-000001 -> code=SUCCEEDED token=dRK5R6Sqz7...
 复跑结论：13 条用例在 main@abc6c62 上全部通过，与初轮 main@fb2719e 结果一致；
           13/13 通过，0 失败，0 未执行，通过率与执行率均为 100%。
 
+
+======================================================================
+14. 合并 main（S1 用户管理）后的 16 表复验
+======================================================================
+
+14.1 前置
+  执行 deploy/sql/s1-incremental.sql，新增 user_command、staff_authorization、
+  staff_account_scope 三张表，数据库由 13 表升至 16 表。
+
+14.2 DEP-S4-001/002 复验（verify-db.ps1，原始输出存档 verify-output-20261119-174945.txt）
+
+  table_count  = 16
+  fk_count     = 16
+  check_count  = 0（MySQL 8.0.13 仍不登记 CHECK 约束，DEF-S4-001 未变化）
+  余额不变式   : ACC_S2_001 50000.00 OK；ACC_S2_002 30000.00 OK
+  口令哈希     : OPS-ADMIN / UID-000001 / UID-000002 均为 $2a$12$
+  login_lookup_rows = 1
+  预期 1062     : uk_transaction_request、uk_transaction_flow_role
+  记账校验      : 50000.00 -> 50100.00，increased_by = 100.00，flow_count = 1
+
+结论：合并 main 后 16 表 16 外键，DEP-S4-001/002 通过；其余用例结论不变。
