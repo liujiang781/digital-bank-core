@@ -27,7 +27,7 @@ public final class AccountDtos {
     public record StatusResult(String accountId, String status) { }
     public record LimitsResult(String accountId, String personalSingleLimit,
             String personalDailyLimit) { }
-    public record RestrictionView(long restrictionId, String reason) { }
+    public record RestrictionView(long restrictionId, String reason, String source, boolean releaseApproved) { }
     public record FreezeResult(String accountId, String status, List<RestrictionView> restrictions) { }
     public record OperationView(long operationId, String action, String reason,
             String result, OffsetDateTime occurredAt) { }

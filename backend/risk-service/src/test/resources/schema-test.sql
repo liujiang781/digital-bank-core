@@ -23,6 +23,21 @@ CREATE TABLE IF NOT EXISTS `transaction` (
     CONSTRAINT fk_transaction_account FOREIGN KEY (account_id) REFERENCES account (account_id)
 );
 
+CREATE TABLE IF NOT EXISTS account_status_log (
+    id BIGINT PRIMARY KEY,
+    account_id VARCHAR(32) NOT NULL,
+    new_status VARCHAR(16) NOT NULL,
+    change_reason VARCHAR(255)
+);
+
+CREATE TABLE IF NOT EXISTS risk_freeze_release (
+    restriction_id BIGINT PRIMARY KEY,
+    approved_by VARCHAR(64) NOT NULL,
+    basis VARCHAR(200) NOT NULL,
+    approved_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (restriction_id) REFERENCES account_status_log(id)
+);
+
 CREATE TABLE IF NOT EXISTS risk_rule (
     id BIGINT AUTO_INCREMENT PRIMARY KEY,
     rule_id VARCHAR(32) NOT NULL,

@@ -30,7 +30,7 @@ public final class TransactionDtos {
     public record TradeView(String tradeNo, String status, String reasonCode) { }
 
     public record TradeDetailView(String tradeNo, String businessType, String status,
-            String amount, String failureReason) { }
+            String amount, String failureReason, String accountId) { }
 
     public record TradeSummary(String tradeNo, String businessType, String status,
             String amount, String createdAt) { }
@@ -62,6 +62,9 @@ public final class TransactionDtos {
             @JsonDeserialize(using = AmountStringDeserializer.class) String amount, String currency,
             String result, String channelRequestId, String evidenceId,
             OffsetDateTime observedAt, String reasonCode) { }
+
+    public record WithdrawalResult(String tradeNo, String payerAccountId, String amount, String currency,
+            String result, String channelRequestId, String evidenceId, OffsetDateTime observedAt, String reasonCode) { }
 
     public record Outcome(String tradeNo, String status, String reservationStatus, String reasonCode) { }
 

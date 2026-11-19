@@ -26,6 +26,7 @@ DROP TABLE IF EXISTS risk_rule;
 DROP TABLE IF EXISTS transfer_order;
 DROP TABLE IF EXISTS transaction_flow;
 DROP TABLE IF EXISTS `transaction`;
+DROP TABLE IF EXISTS risk_freeze_release;
 DROP TABLE IF EXISTS account_status_log;
 DROP TABLE IF EXISTS account;
 DROP TABLE IF EXISTS credential;
@@ -128,6 +129,14 @@ CREATE TABLE account_status_log (
 -- =============================================================
 -- 5. transaction 交易表（BR-01 金额、BR-11/12 幂等）
 -- =============================================================
+CREATE TABLE IF NOT EXISTS risk_freeze_release (
+    restriction_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+    approved_by VARCHAR(64) NOT NULL,
+    basis VARCHAR(200) NOT NULL,
+    approved_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_risk_freeze_release_restriction FOREIGN KEY (restriction_id) REFERENCES account_status_log(id)
+);
+
 CREATE TABLE `transaction` (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     trade_no VARCHAR(32) NOT NULL COMMENT '交易流水号(全局唯一)',

@@ -37,12 +37,15 @@ IDEA 从完整仓库的 `backend/pom.xml` 打开父工程，S2 日常编辑本�
 
 基础 schema 包含 `DROP TABLE`，只用于空的开发数据库初始化。已有数据环境只执行相应增量脚本。应用使用 `spring.sql.init.mode=never`，启动不会替代以上步骤。
 
+使用实验二基础 schema 或升级已有环境时，另执行 [实验一需求补齐增量](../../deploy/sql/s2-requirement-gaps-incremental.sql)，并授予账户服务读取 `risk_freeze_release` 的权限。全新环境也可直接使用包含该表的 [部署 schema](../../deploy/sql/schema.sql)。
+
 使用 MySQL CLI 时，先从本机完整仓库根目录启动客户端，再执行以下相对路径命令；不依赖组员的盘符或项目绝对路径：
 
 ```sql
 SOURCE docs/02-设计规格说明书/s4数据库设计/sql/schema.sql;
 USE payment_db;
 SOURCE backend/account-service/src/main/resources/db/s2-incremental.sql;
+SOURCE deploy/sql/s2-requirement-gaps-incremental.sql;
 ```
 
 ## 3 构建与启动
@@ -94,11 +97,14 @@ S1 已接入真实登录、内部会话核验和认证过滤器。角色与范�
 | `POST /internal/v1/postings/deposit-completions` | 存款成功结果的兼容入口 |
 | `GET /internal/v1/postings/{tradeNo}` | 主库读取当前资金状态 |
 | `POST /internal/v1/postings/reserve` | 取款、本行转账或跨行转账逐笔预留 |
-| `POST /internal/v1/postings/withdrawal-completions` | 消耗预留并完成取款 |
+| `POST /internal/v1/postings/withdrawal-results` | 取款渠道回执，按结果保留预留、扣账或释放 |
+| `POST /internal/v1/postings/withdrawal-completions` | 重试已登记成功回执的取款扣账 |
 | `POST /internal/v1/postings/internal-transfers` | 双账户原子记账 |
 | `POST /internal/v1/postings/external-transfer-results` | 跨行渠道回执，按结果保留预留、扣款或释放 |
-| `POST /internal/v1/postings/releases` | 取款、本行转账明确本地失败后的逐笔释放 |
-| `POST /internal/v1/postings/failures` | 受理前风控拒绝，或取款、本行转账明确本地失败 |
+| `POST /internal/v1/postings/releases` | 本行转账明确本地失败或旧版取款恢复的逐笔释放 |
+| `POST /internal/v1/postings/failures` | 受理前风控拒绝，或本行转账明确本地失败和旧版取款恢复 |
+
+取款回执、风控解除结论和运营查询见 [实验一需求联调交接](docs/S2-S3实验一需求联调交接.md)。
 
 跨行建单、渠道回执、恢复重试和联调步骤见 [S2 与 S3 跨行转账交接](../../docs/03-原型实现/S2-S3跨行转账交接.md)。
 

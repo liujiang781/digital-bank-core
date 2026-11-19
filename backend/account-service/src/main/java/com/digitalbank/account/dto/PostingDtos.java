@@ -23,6 +23,12 @@ public final class PostingDtos {
             @JsonFormat(without = JsonFormat.Feature.ADJUST_DATES_TO_CONTEXT_TIME_ZONE)
             OffsetDateTime observedAt, String reasonCode) { }
 
+    public record WithdrawalResult(String tradeNo, String payerAccountId,
+            @JsonDeserialize(using = AmountStringDeserializer.class) String amount, String currency,
+            String result, String channelRequestId, String evidenceId,
+            @JsonFormat(without = JsonFormat.Feature.ADJUST_DATES_TO_CONTEXT_TIME_ZONE)
+            OffsetDateTime observedAt, String reasonCode) { }
+
     public record Failure(String tradeNo, String decision, String reasonCode,
             String evidenceType, String evidenceId) { }
 

@@ -24,6 +24,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * S3 P2/待评审风控接口对外测试：告警处置、规则提交/审批、名单提交/审批。
@@ -93,6 +94,38 @@ class RiskP2ApiTest {
     }
 
     // ---------- 告警处置 ----------
+
+    @Test
+    @Transactional
+    void onlyScopedRiskCanApproveTheMatchingActiveRiskRestriction() throws Exception {
+        jdbc.update("UPDATE account SET status = 'FROZEN' WHERE account_id IN (?, ?)", IN_SCOPE, OUT_SCOPE);
+        jdbc.update("INSERT INTO account_status_log (id, account_id, new_status, change_reason) "
+                + "VALUES (1001, ?, 'FROZEN', 'RISK: review'), (1002, ?, 'FROZEN', 'RISK: unrelated'), "
+                + "(1003, ?, 'FROZEN', 'OPERATIONS: review')", IN_SCOPE, OUT_SCOPE, IN_SCOPE);
+        String path = "/api/v1/risk/accounts/{accountId}/restrictions/{restrictionId}/release-approval";
+        String basis = "{\"basis\":\"风控复核通过\"}";
+        mockMvc.perform(post(path, IN_SCOPE, 1001).header("Authorization", "Bearer " + OPS_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON).content(basis))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post(path, OUT_SCOPE, 1002).header("Authorization", "Bearer " + RISK1_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON).content(basis))
+                .andExpect(status().isForbidden());
+        for (long restrictionId : new long[] {1002, 1003}) {
+            mockMvc.perform(post(path, IN_SCOPE, restrictionId).header("Authorization", "Bearer " + RISK1_TOKEN)
+                            .contentType(MediaType.APPLICATION_JSON).content(basis))
+                    .andExpect(jsonPath("$.code").value("ACCOUNT_STATUS_INVALID"));
+        }
+        for (int replay = 0; replay < 2; replay++) {
+            mockMvc.perform(post(path, IN_SCOPE, 1001).header("Authorization", "Bearer " + RISK1_TOKEN)
+                            .contentType(MediaType.APPLICATION_JSON).content(basis))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.restrictionId").value(1001));
+        }
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM risk_freeze_release", Integer.class));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM audit_log WHERE action = 'RISK_FREEZE_RELEASE_APPROVE'", Integer.class));
+        assertEquals("FROZEN", jdbc.queryForObject("SELECT status FROM account WHERE account_id = ?", String.class, IN_SCOPE));
+    }
 
     @Test
     void riskWriterCanDisposeAlertWithIdempotency() throws Exception {

@@ -12,6 +12,7 @@ import com.digitalbank.transaction.dto.TransactionDtos.Outcome;
 import com.digitalbank.transaction.dto.TransactionDtos.Release;
 import com.digitalbank.transaction.dto.TransactionDtos.Snapshot;
 import com.digitalbank.transaction.dto.TransactionDtos.SnapshotRequest;
+import com.digitalbank.transaction.dto.TransactionDtos.WithdrawalResult;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
@@ -79,9 +80,8 @@ public class AccountClient {
         return sendCommand("/internal/v1/postings/reserve", command, tradeNo, traceId);
     }
 
-    /** 取款提交：消耗原预留，B/R 同减并追加 WITHDRAW_OUT 流水，置 SUCCESS。 */
-    public Outcome withdrawalCompletion(Command command, String tradeNo, String traceId) {
-        return sendCommand("/internal/v1/postings/withdrawal-completions", command, tradeNo, traceId);
+    public Outcome withdrawalResult(WithdrawalResult receipt, String tradeNo, String traceId) {
+        return sendChannelResult("/internal/v1/postings/withdrawal-results", receipt, tradeNo, traceId);
     }
 
     /** 本行转账提交：消耗原预留，付款与收款记账及双方流水同事务提交，置 SUCCESS。 */
@@ -100,6 +100,10 @@ public class AccountClient {
      * PROCESSING/UNKNOWN 都要重放同一回执，只有终态停止（跨行交接文档第 3 节）。
      */
     public Outcome externalTransferResult(ExternalTransferResult receipt, String tradeNo, String traceId) {
+        return sendChannelResult("/internal/v1/postings/external-transfer-results", receipt, tradeNo, traceId);
+    }
+
+    private Outcome sendChannelResult(String path, Object receipt, String tradeNo, String traceId) {
         BizException last = null;
         for (int attempt = 0; attempt <= MAX_RETRIES; attempt++) {
             if (attempt > 0) {
@@ -108,8 +112,7 @@ public class AccountClient {
                 sleep(BACKOFF_MILLIS[attempt - 1]);
             }
             try {
-                ApiResponse<Outcome> response = post("/internal/v1/postings/external-transfer-results",
-                        receipt, traceId, OUTCOME_TYPE);
+                ApiResponse<Outcome> response = post(path, receipt, traceId, OUTCOME_TYPE);
                 return response.data();
             } catch (BizException e) {
                 last = e;
