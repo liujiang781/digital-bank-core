@@ -427,3 +427,50 @@ LOGIN UID-000001 -> code=SUCCEEDED token=dRK5R6Sqz7...
       是否确实指向 auth.database 数据源
   对照：合并前基线 main@abc6c62 上，UID-000001/demo123 经 18080 登录与
   存款冒烟均为 SUCCEEDED（见第 13 节），说明该问题由本次合并引入。
+
+================================================================================
+第 16 节  DEF-S4-004 根因确认与修复（2026-11-19 追加）
+时间：2026-11-19  基线：main@75ddc06 + 列级授权
+================================================================================
+
+【更正】第 15 节中“performance_schema 无错误码 => 异常未到达服务端”的推断不成立：
+  采样窗口内 user-service 实际并未运行，取到的是空样本。以探针直连数据库复测后，
+  服务端确实返回了明确错误码。
+
+【探针实测】JDBC 直连 payment_db，以 bank_user 身份执行 S1 的两条业务 SQL：
+  SELECT role_id, version FROM staff_authorization WHERE identity_id = ? FOR UPDATE
+    -> SQLState=42000  errorCode=1143  ER_COLUMNACCESS_DENIED_ERROR
+  SELECT account_id FROM staff_account_scope WHERE identity_id = ?
+    -> 普通 SELECT 正常
+
+  交叉验证（同一账号、同一库）：
+    credential        FOR UPDATE -> 1143
+    user_command      FOR UPDATE -> 1143
+    customer          FOR UPDATE -> 1143
+    staff_authorization FOR UPDATE -> 1143
+    account（仅表级 SELECT）     -> 1142
+    以上各表去掉 FOR UPDATE 的普通 SELECT -> 全部 OK
+
+【结论】MySQL 8.0.13 的锁读权限检查存在缺陷：表级 SELECT/UPDATE 已授予时，
+  SELECT ... FOR UPDATE 仍被判为列级越权（1143）。MySQL 8.0.14+ 已修复。
+  这不是 S1 的代码错误，也不是授权漏授，属环境版本限制。
+
+【修复】deploy/sql/exp4-grant.sh 在表级授权之后追加 8.0.13 兼容的列级授权：
+  GRANT SELECT (identity_id, role_id, version), UPDATE (identity_id, role_id, version)
+    ON payment_db.staff_authorization TO 'bank_user'@'%';
+  GRANT SELECT (identity_id, account_id), UPDATE (identity_id, account_id)
+    ON payment_db.staff_account_scope TO 'bank_user'@'%';
+  （升级到 8.0.14+ 后这两行可删除）
+
+【复测】POST /api/v1/auth/login，UID-000001 / demo123：
+  --- login via 8081 ---
+  code=SUCCEEDED identity= role= scope= tokenLen=43
+  --- login via 8085 ---
+  code=SUCCEEDED identity= role= scope= tokenLen=43
+
+【移交 S1】
+  1. StaffAuthorizationService 第 35-38 行 catch (DataAccessException) 补 log.error，
+     否则错误码被吞，只能靠探针定位。
+  2. readAuthorization 的 SELECT ... FOR UPDATE 建议改为基于 version 字段的乐观锁，
+     同时规避锁读性能问题与 8.0.13 权限缺陷。
+

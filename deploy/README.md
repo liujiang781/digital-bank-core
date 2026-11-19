@@ -72,8 +72,20 @@ CREATE USER IF NOT EXISTS 'account_service'@'%'    IDENTIFIED BY '<随机口令>
 CREATE USER IF NOT EXISTS 'transaction_service'@'%' IDENTIFIED BY '<随机口令>';
 CREATE USER IF NOT EXISTS 'risk_service'@'%'       IDENTIFIED BY '<随机口令>';
 
-GRANT SELECT ON payment_db.customer   TO 'bank_user'@'%';
-GRANT SELECT ON payment_db.credential TO 'bank_user'@'%';
+GRANT SELECT, INSERT, UPDATE         ON payment_db.customer             TO 'bank_user'@'%';
+GRANT SELECT, INSERT, UPDATE         ON payment_db.credential           TO 'bank_user'@'%';
+GRANT SELECT, INSERT, UPDATE         ON payment_db.user_command         TO 'bank_user'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE ON payment_db.staff_authorization   TO 'bank_user'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE ON payment_db.staff_account_scope   TO 'bank_user'@'%';
+GRANT SELECT, INSERT                 ON payment_db.audit_log            TO 'bank_user'@'%';
+GRANT SELECT                         ON payment_db.account              TO 'bank_user'@'%';
+
+-- MySQL 8.0.13 的锁读权限检查有缺陷：表级授权已足够时，SELECT ... FOR UPDATE 仍报
+-- ERROR 1143（列级权限拒绝），导致登录 503。下面两行为 8.0.13 兼容补丁，8.0.14+ 可删。
+GRANT SELECT (identity_id, role_id, version), UPDATE (identity_id, role_id, version)
+  ON payment_db.staff_authorization TO 'bank_user'@'%';
+GRANT SELECT (identity_id, account_id), UPDATE (identity_id, account_id)
+  ON payment_db.staff_account_scope TO 'bank_user'@'%';
 
 GRANT SELECT, INSERT, UPDATE ON payment_db.account             TO 'account_service'@'%';
 GRANT SELECT, INSERT         ON payment_db.account_status_log  TO 'account_service'@'%';
