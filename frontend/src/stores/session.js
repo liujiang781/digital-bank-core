@@ -10,7 +10,13 @@ export const useSessionStore = defineStore('session', {
   }),
   getters: {
     isLoggedIn: (state) => Boolean(state.token),
-    displayName: (state) => state.customer?.realName || state.customer?.identityId || '客户'
+    displayName: (state) => state.customer?.realName || state.customer?.identityId || '客户',
+    // 管理角色：OPERATIONS 可见运营台，RISK 可见风控台。
+    // 角色来自服务端登录响应，前端只做展示控制，真正的权限校验仍在服务端。
+    roles: (state) => state.customer?.roles || [],
+    isOperations: (state) => (state.customer?.roles || []).includes('OPERATIONS'),
+    isRisk: (state) => (state.customer?.roles || []).includes('RISK'),
+    isAdmin: (state) => (state.customer?.roles || []).includes('ADMIN')
   },
   actions: {
     loginSuccess({ token, customer }) {
