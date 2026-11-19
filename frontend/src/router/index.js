@@ -24,7 +24,10 @@ const routes = [
       { path: 'deposit', name: 'deposit', component: () => import('../views/DepositView.vue') },
       { path: 'withdraw', name: 'withdraw', component: () => import('../views/WithdrawalView.vue') },
       { path: 'transfer', name: 'transfer', component: () => import('../views/TransferView.vue') },
-      { path: 'transactions', name: 'transactions', component: () => import('../views/TransactionsView.vue') }
+      { path: 'transactions', name: 'transactions', component: () => import('../views/TransactionsView.vue') },
+      { path: 'profile', name: 'profile', component: () => import('../views/ProfileView.vue') },
+      { path: 'ops', name: 'ops', component: () => import('../views/OpsView.vue') },
+      { path: 'risk', name: 'risk', component: () => import('../views/RiskView.vue') }
     ]
   },
   { path: '/:pathMatch(.*)*', redirect: '/accounts' }

@@ -1,7 +1,7 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Wallet, Plus, Minus, Switch, List } from '@element-plus/icons-vue'
+import { Wallet, Plus, Minus, Switch, List, User, OfficeBuilding, Lock } from '@element-plus/icons-vue'
 import { useSessionStore } from '../stores/session'
 import { logout } from '../api/auth'
 
@@ -52,6 +52,17 @@ async function handleLogout() {
           </el-menu-item>
           <el-menu-item index="/transactions">
             <el-icon><List /></el-icon><span>交易记录</span>
+          </el-menu-item>
+          <el-menu-item index="/profile">
+            <el-icon><User /></el-icon><span>个人资料</span>
+          </el-menu-item>
+
+          <div class="aside-label aside-label-second">后台管理（需对应角色）</div>
+          <el-menu-item index="/ops">
+            <el-icon><OfficeBuilding /></el-icon><span>运营管理</span>
+          </el-menu-item>
+          <el-menu-item index="/risk">
+            <el-icon><Lock /></el-icon><span>风控管理</span>
           </el-menu-item>
         </el-menu>
       </el-aside>
@@ -127,6 +138,11 @@ async function handleLogout() {
   font-size: 11px;
   color: var(--text-muted);
   letter-spacing: 2px;
+}
+.aside-label-second {
+  padding-top: 16px;
+  border-top: 1px solid var(--border-soft);
+  margin-top: 12px;
 }
 .layout-aside :deep(.el-menu) {
   border-right: none;

@@ -2,8 +2,10 @@
 // 交易记录页（UC-TR-05 列表形态）
 // 非终态（PROCESSING/UNKNOWN/RECOVERING）交易可点击"查询状态"触发渠道核对收敛。
 import { onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { listTransactions, getTransaction } from '../api/transaction'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  listTransactions, getTransaction, getReceipt, reconcileTrade, recoverTrade
+} from '../api/transaction'
 import { listAccounts, getFundEntries } from '../api/account'
 import {
   statusLabel,
@@ -17,6 +19,62 @@ const loading = ref(false)
 const rows = reactive({ items: [], total: 0, page: 1, pageSize: 20 })
 const filters = reactive({ businessType: '', status: '' })
 const checking = reactive({})
+
+// UC-TR-07 交易回单
+const receiptVisible = ref(false)
+const receipt = ref(null)
+const receiptLoading = ref(false)
+
+// UC-TR-08 核对 / UC-TR-09 恢复（运营授权，后端校验角色）
+const actionLoading = reactive({})
+
+async function showReceipt(tradeNo) {
+  receiptLoading.value = true
+  try {
+    const res = await getReceipt(tradeNo)
+    if (res.code === 'SUCCEEDED') {
+      receipt.value = res.data
+      receiptVisible.value = true
+    } else {
+      ElMessage.error(res.message || '回单生成失败')
+    }
+  } catch (e) {
+    ElMessage.error(e.message || '网络异常')
+  } finally {
+    receiptLoading.value = false
+  }
+}
+
+async function doAction(tradeNo, kind) {
+  const label = kind === 'reconcile' ? '核对待确认交易' : '重试资金恢复'
+  let reason = ''
+  try {
+    const answer = await ElMessageBox.prompt(
+      `${label}：${tradeNo}。请输入操作原因（必填，将写入审计）。`,
+      label,
+      { confirmButtonText: '确认', cancelButtonText: '取消', inputValidator: (v) => !!v?.trim() || '原因不能为空' }
+    )
+    reason = answer.value
+  } catch {
+    return
+  }
+  actionLoading[tradeNo + kind] = true
+  try {
+    const api = kind === 'reconcile' ? reconcileTrade : recoverTrade
+    const res = await api(tradeNo, { reason, requestId: crypto.randomUUID() })
+    if (res.code === 'SUCCEEDED') {
+      ElMessage.success(`${label}成功：${res.data?.status || '已提交'}`)
+      await load()
+    } else {
+      ElMessage.error(res.message || `${label}失败`)
+    }
+  } catch (e) {
+    ElMessage.error(e.message || '网络异常')
+  } finally {
+    actionLoading[tradeNo + kind] = false
+  }
+}
+
 // 后端 transaction 表只记发起方的原单，收款方查不到交易记录。
 // 收款方的入账在资金流水里，用「我收到的款项」标签单独展示。
 const tab = ref('initiated')
@@ -164,7 +222,7 @@ onMounted(load)
           <template #default="{ row }">+{{ formatAmount(row.amount) }}</template>
         </el-table-column>
         <el-table-column prop="createdAt" label="时间" min-width="170" />
-        <el-table-column v-if="tab === 'initiated'" label="操作" width="130" fixed="right">
+        <el-table-column v-if="tab === 'initiated'" label="操作" width="260" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="!isFinalStatus(row.status)"
@@ -174,6 +232,30 @@ onMounted(load)
               @click="checkStatus(row.tradeNo)"
             >
               查询状态
+            </el-button>
+            <el-button
+              v-if="row.status === 'SUCCESS'"
+              size="small"
+              :loading="receiptLoading && receipt?.tradeNo === row.tradeNo"
+              @click="showReceipt(row.tradeNo)"
+            >
+              回单
+            </el-button>
+            <el-button
+              v-if="row.status === 'UNKNOWN'"
+              size="small"
+              :loading="actionLoading[row.tradeNo + 'reconcile']"
+              @click="doAction(row.tradeNo, 'reconcile')"
+            >
+              核对
+            </el-button>
+            <el-button
+              v-if="row.status === 'RECOVERING'"
+              size="small"
+              :loading="actionLoading[row.tradeNo + 'recover']"
+              @click="doAction(row.tradeNo, 'recover')"
+            >
+              恢复
             </el-button>
           </template>
         </el-table-column>
@@ -188,6 +270,27 @@ onMounted(load)
         @current-change="load"
       />
     </el-card>
+
+    <!-- UC-TR-07 交易回单（模拟凭证） -->
+    <el-dialog v-model="receiptVisible" title="交易回单（教学模拟）" width="480px">
+      <div v-if="receipt" class="receipt-box">
+        <div class="receipt-no">{{ receipt.receiptNo }}</div>
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="交易号">{{ receipt.tradeNo }}</el-descriptions-item>
+          <el-descriptions-item label="业务类型">{{ businessTypeLabel(receipt.businessType) }}</el-descriptions-item>
+          <el-descriptions-item label="状态">{{ statusLabel(receipt.status) }}</el-descriptions-item>
+          <el-descriptions-item label="金额">{{ formatAmount(receipt.amount) }} {{ receipt.currency }}</el-descriptions-item>
+          <el-descriptions-item label="账户">{{ receipt.accountId }}</el-descriptions-item>
+          <el-descriptions-item label="渠道凭证">{{ receipt.channelEvidenceId || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="完成时间">{{ receipt.completedAt || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="签发时间">{{ receipt.issuedAt || '—' }}</el-descriptions-item>
+        </el-descriptions>
+        <div v-if="receipt.notice" class="receipt-notice">{{ receipt.notice }}</div>
+      </div>
+      <template #footer>
+        <el-button @click="receiptVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -196,5 +299,25 @@ onMounted(load)
   display: flex;
   gap: 12px;
   margin-bottom: 12px;
+}
+.receipt-box {
+  padding: 4px 0;
+}
+.receipt-no {
+  text-align: center;
+  font-family: Consolas, Menlo, monospace;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--brand-primary);
+  margin-bottom: 14px;
+  letter-spacing: 1px;
+}
+.receipt-notice {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--bg-page);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 </style>
