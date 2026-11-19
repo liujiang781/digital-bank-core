@@ -267,6 +267,84 @@ CREATE TABLE risk_event (
     CONSTRAINT chk_risk_event_rule_version CHECK (rule_version > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='风险事件表';
 
+-- S3 P2/待评审增量表的初始化定义，镜像 backend/risk-service/src/main/resources/db/s3-risk-incremental.sql。
+CREATE TABLE IF NOT EXISTS risk_alert_disposal (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    event_id VARCHAR(32) NOT NULL,
+    identity_id VARCHAR(64) NOT NULL,
+    decision VARCHAR(24) NOT NULL,
+    basis VARCHAR(1000) NOT NULL,
+    request_id VARCHAR(64) NOT NULL,
+    request_hash CHAR(64) NOT NULL,
+    trade_no VARCHAR(32) NOT NULL,
+    trace_id VARCHAR(64) DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_alert_disposal (event_id, identity_id, request_id),
+    KEY idx_alert_disposal_event (event_id),
+    CONSTRAINT chk_alert_decision CHECK (decision IN ('CONFIRMED', 'FALSE_POSITIVE', 'ESCALATED'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='风险告警处置留痕表(S3 专用)';
+
+CREATE TABLE IF NOT EXISTS risk_change_request (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    change_id VARCHAR(64) NOT NULL,
+    change_type VARCHAR(24) NOT NULL,
+    target_ref VARCHAR(64) NOT NULL,
+    request_json TEXT NOT NULL,
+    status VARCHAR(16) NOT NULL DEFAULT 'PENDING',
+    submitted_by VARCHAR(64) NOT NULL,
+    submit_reason VARCHAR(255) DEFAULT NULL,
+    request_id VARCHAR(64) NOT NULL,
+    request_hash CHAR(64) NOT NULL,
+    approved_by VARCHAR(64) DEFAULT NULL,
+    approval_note VARCHAR(255) DEFAULT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    decided_at DATETIME DEFAULT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_change_request (change_type, submitted_by, request_id),
+    UNIQUE KEY uk_change_id (change_id),
+    KEY idx_change_status (status, created_at),
+    CONSTRAINT chk_change_type CHECK (change_type IN ('RULE', 'LIST')),
+    CONSTRAINT chk_change_status CHECK (status IN ('PENDING', 'APPROVED', 'REJECTED', 'APPLIED'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='风控变更审批单表(S3 专用)';
+
+CREATE TABLE IF NOT EXISTS risk_change_approval (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    change_id VARCHAR(64) NOT NULL,
+    identity_id VARCHAR(64) NOT NULL,
+    decision VARCHAR(16) NOT NULL,
+    note VARCHAR(255) DEFAULT NULL,
+    request_id VARCHAR(64) NOT NULL,
+    request_hash CHAR(64) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_change_approval (change_id, identity_id, request_id),
+    KEY idx_approval_change (change_id),
+    CONSTRAINT chk_approval_decision CHECK (decision IN ('APPROVE', 'REJECT'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='风控审批留痕表(S3 专用)';
+
+CREATE TABLE IF NOT EXISTS risk_list_entry (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+    entry_id VARCHAR(64) NOT NULL,
+    list_type VARCHAR(16) NOT NULL,
+    subject_type VARCHAR(16) NOT NULL,
+    subject_id VARCHAR(64) NOT NULL,
+    reason_code VARCHAR(32) DEFAULT NULL,
+    enabled TINYINT(1) NOT NULL DEFAULT 1,
+    rule_version INT NOT NULL DEFAULT 1,
+    change_id VARCHAR(64) DEFAULT NULL,
+    created_by VARCHAR(64) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_list_entry (entry_id),
+    UNIQUE KEY uk_list_subject (list_type, subject_type, subject_id),
+    KEY idx_list_subject (subject_type, subject_id),
+    CONSTRAINT chk_list_type CHECK (list_type IN ('BLACKLIST', 'WHITELIST')),
+    CONSTRAINT chk_list_subject_type CHECK (subject_type IN ('ACCOUNT', 'CUSTOMER')),
+    CONSTRAINT chk_list_enabled CHECK (enabled IN (0, 1))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='风险名单条目表(S3 专用)';
+
 CREATE TABLE audit_log (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     operator_identity_id VARCHAR(64) NOT NULL COMMENT '操作者身份',
@@ -274,7 +352,7 @@ CREATE TABLE audit_log (
     target_type VARCHAR(32) NOT NULL COMMENT '操作对象类型: account/transaction 等',
     target_ref VARCHAR(64) DEFAULT NULL COMMENT '操作对象业务标识',
     reason VARCHAR(255) DEFAULT NULL COMMENT '原因',
-    result VARCHAR(16) DEFAULT NULL COMMENT '结果: SUCCESS/FAILURE/REJECT',
+    result VARCHAR(64) DEFAULT NULL COMMENT '结果: SUCCESS/FAILURE/REJECT 或人工核对结论码',
     trade_no VARCHAR(32) DEFAULT NULL COMMENT '关联交易流水号',
     ip_address VARCHAR(45) DEFAULT NULL COMMENT '客户端IP(兼容IPv6)',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '操作时间',
@@ -284,7 +362,7 @@ CREATE TABLE audit_log (
     KEY idx_audit_log_operator_created (operator_identity_id, created_at),
     KEY idx_audit_log_trade_no (trade_no),
     KEY idx_audit_log_target (target_type, target_ref),
-    CONSTRAINT chk_audit_log_result CHECK (result IS NULL OR result IN ('SUCCESS', 'FAILURE', 'REJECT'))
+    CONSTRAINT chk_audit_log_result CHECK (result IS NULL OR CHAR_LENGTH(result) <= 64)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='审计日志表';
 
 CREATE TABLE IF NOT EXISTS account_command (
@@ -337,6 +415,22 @@ CREATE TABLE IF NOT EXISTS mock_channel_deposit (
     CONSTRAINT chk_channel_currency CHECK (currency = 'CNY'),
     CONSTRAINT chk_channel_result CHECK (result IN ('SUCCESS', 'FAILED', 'UNKNOWN'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='模拟渠道入金记录表(S3)';
+
+-- 运营核对/恢复重试幂等留痕(S3)：同身份+动作+requestId 只执行一次，同键异内容报 409。
+CREATE TABLE IF NOT EXISTS trade_manual_action (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    identity_id VARCHAR(64) NOT NULL COMMENT '运营身份(服务端会话核验)',
+    action VARCHAR(24) NOT NULL COMMENT '动作: RECONCILE/RECOVER',
+    request_id VARCHAR(64) NOT NULL COMMENT '运营填写的 UUID 请求号',
+    request_hash CHAR(64) NOT NULL COMMENT '请求内容 SHA-256, 同键异内容报冲突',
+    trade_no VARCHAR(32) NOT NULL COMMENT '关联交易流水号',
+    result_json TEXT NOT NULL COMMENT '幂等结果快照(JSON)',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '首次执行时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_manual_action (identity_id, action, request_id),
+    KEY idx_manual_action_trade (trade_no, action, created_at),
+    CONSTRAINT chk_manual_action CHECK (action IN ('RECONCILE', 'RECOVER'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='交易人工操作幂等留痕表(S3)';
 
 SET FOREIGN_KEY_CHECKS = 1;
 

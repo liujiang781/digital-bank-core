@@ -8,8 +8,10 @@ import com.digitalbank.common.api.ErrorCode;
 import com.digitalbank.common.exception.BizException;
 import com.digitalbank.transaction.dto.TransactionDtos.TradePage;
 import com.digitalbank.transaction.dto.TransactionDtos.TradeSummary;
+import com.digitalbank.transaction.security.Actor;
 import com.digitalbank.transaction.service.IdempotencyService.Claim;
 import java.math.BigDecimal;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,6 +30,8 @@ class TradeQueryStatusAliasTest {
     private static final String ACCOUNT = "ACC_Q001";
     private static final String SUCCESS_TRADE = "TRDQ001SUCCESS";
     private static final String FAILED_TRADE = "TRDQ001FAILED";
+    private static final String UNKNOWN_TRADE = "TRDQ001UNKNOWN";
+    private static final String RECOVERING_TRADE = "TRDQ001RECOVER";
 
     @Autowired
     private TradeQueryService service;
@@ -48,6 +52,13 @@ class TradeQueryStatusAliasTest {
         jdbc.update("INSERT INTO `transaction` (trade_no, identity_id, business_type, request_id, request_hash, "
                         + "account_id, amount, currency, status) VALUES (?, ?, 'WITHDRAWAL', 'rq-failed', ?, ?, ?, 'CNY', 'FAILED')",
                 FAILED_TRADE, IDENTITY, "g".repeat(64), ACCOUNT, new BigDecimal("50.00"));
+        jdbc.update("INSERT INTO `transaction` (trade_no, identity_id, business_type, request_id, request_hash, "
+                        + "account_id, amount, currency, status) VALUES (?, ?, 'DEPOSIT', 'rq-unknown', ?, ?, ?, 'CNY', 'UNKNOWN')",
+                UNKNOWN_TRADE, IDENTITY, "u".repeat(64), ACCOUNT, new BigDecimal("70.00"));
+        jdbc.update("INSERT INTO `transaction` (trade_no, identity_id, business_type, request_id, request_hash, "
+                        + "account_id, amount, currency, status) VALUES (?, ?, 'WITHDRAWAL', 'rq-recover', ?, ?, ?, 'CNY', 'RECOVERING')",
+                RECOVERING_TRADE, IDENTITY, "v".repeat(64), ACCOUNT, new BigDecimal("80.00"));
+        jdbc.update("DELETE FROM audit_log");
     }
 
     @Test
@@ -69,8 +80,50 @@ class TradeQueryStatusAliasTest {
     @Test
     void unknownStatusLiteralsStayRejected() {
         BizException rejected = assertThrows(BizException.class,
-                () -> service.list(IDENTITY, null, "PENDING", 1, 20, null));
+                () -> service.list(IDENTITY, null, "BOGUS", 1, 20, null));
         assertEquals(ErrorCode.INVALID_ARGUMENT, rejected.getErrorCode());
+    }
+
+    @Test
+    void pendingAliasMapsToThreeOpenStates() {
+        // 契约内没有 /transactions/pending：运营待处理清单复用本端点 status=PENDING
+        TradePage page = service.list(IDENTITY, null, "PENDING", 1, 20, null);
+        assertEquals(2, page.total());
+        Set<String> trades = new java.util.HashSet<>();
+        page.items().forEach(item -> trades.add(item.tradeNo()));
+        assertTrue(trades.contains(UNKNOWN_TRADE));
+        assertTrue(trades.contains(RECOVERING_TRADE));
+        // 终态与受理态都不属于待处理
+        assertTrue(!trades.contains(SUCCESS_TRADE) && !trades.contains(FAILED_TRADE));
+    }
+
+    @Test
+    void commaSeparatedStatusesAreUnion() {
+        TradePage page = service.list(IDENTITY, null, "UNKNOWN,RECOVERING", 1, 20, null);
+        assertEquals(2, page.total());
+        // 重复与空白不放大结果
+        assertEquals(2, service.list(IDENTITY, null, "UNKNOWN,, RECOVERING,UNKNOWN", 1, 20, null).total());
+    }
+
+    @Test
+    void scopedOperatorFiltersByAccountScopeAndAuditsReason() {
+        Actor otherScope = new Actor("identity-other", "customer-other",
+                Set.of("OPERATIONS"), Set.of("ACC_OTHER"));
+        assertEquals(0, service.list(otherScope, null, "PENDING", 1, 20, "运营核查", null).total());
+
+        Actor operator = new Actor("identity-ops", "customer-ops",
+                Set.of("OPERATIONS"), Set.of(ACCOUNT));
+        TradePage page = service.list(operator, null, "PENDING", 1, 20, "待处理核查", null);
+        assertEquals(2, page.total());
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM audit_log WHERE action = 'TRANSACTION_LIST' AND operator_identity_id = 'identity-ops'",
+                Integer.class));
+        assertEquals("待处理核查", jdbc.queryForObject(
+                "SELECT reason FROM audit_log WHERE operator_identity_id = 'identity-ops'", String.class));
+
+        BizException noReason = assertThrows(BizException.class,
+                () -> service.list(operator, null, "PENDING", 1, 20, null, null));
+        assertEquals(ErrorCode.INVALID_ARGUMENT, noReason.getErrorCode());
     }
 
     @Test

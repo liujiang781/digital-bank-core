@@ -72,3 +72,27 @@ CREATE TABLE IF NOT EXISTS transfer_order (
     CONSTRAINT fk_transfer_order_payer FOREIGN KEY (payer_account_id) REFERENCES account(account_id),
     CONSTRAINT fk_transfer_order_payee FOREIGN KEY (payee_account_id) REFERENCES account(account_id)
 );
+
+CREATE TABLE IF NOT EXISTS audit_log (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    operator_identity_id VARCHAR(64) NOT NULL,
+    action VARCHAR(32) NOT NULL,
+    target_type VARCHAR(32) NOT NULL,
+    target_ref VARCHAR(64),
+    reason VARCHAR(255),
+    result VARCHAR(64),
+    trade_no VARCHAR(32),
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS trade_manual_action (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    identity_id VARCHAR(64) NOT NULL,
+    action VARCHAR(24) NOT NULL,
+    request_id VARCHAR(64) NOT NULL,
+    request_hash CHAR(64) NOT NULL,
+    trade_no VARCHAR(32) NOT NULL,
+    result_json TEXT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT uk_manual_action UNIQUE (identity_id, action, request_id)
+);
