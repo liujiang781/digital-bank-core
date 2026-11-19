@@ -1,7 +1,7 @@
 <script setup>
 // 交易记录页（UC-TR-05 列表形态）
 // 非终态（PROCESSING/UNKNOWN/RECOVERING）交易可点击"查询状态"触发渠道核对收敛。
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   listTransactions, getTransaction, getReceipt, reconcileTrade, recoverTrade
@@ -14,10 +14,22 @@ import {
   businessTypeLabel
 } from '../utils/status'
 import { formatAmount } from '../utils/money'
+import { useSessionStore } from '../stores/session'
+
+const session = useSessionStore()
+
+// 后台身份（运营/风控）查交易必须带查询原因，服务端会写入审计。
+// 这里只按角色判断，不依赖 accountScope：旧会话可能没有该字段，
+// 若判成 false 会在挂载时自动查询而被服务端拒绝，重新出现弹错。
+// 角色判 true 但服务端按普通客户处理时，多传的 reason 会被忽略，不影响结果。
+const isBackOffice = computed(() => {
+  const roles = session.roles || []
+  return roles.includes('OPERATIONS') || roles.includes('RISK')
+})
 
 const loading = ref(false)
 const rows = reactive({ items: [], total: 0, page: 1, pageSize: 20 })
-const filters = reactive({ businessType: '', status: '' })
+const filters = reactive({ businessType: '', status: '', reason: '' })
 const checking = reactive({})
 
 // UC-TR-07 交易回单
@@ -123,8 +135,13 @@ async function loadReceived() {
   }
 }
 
-async function load() {
+async function load(notify = false) {
   if (tab.value === 'received') return loadReceived()
+  // 后台身份查询是审计动作：没有查询原因就不发请求，避免服务端拒绝后弹错。
+  if (isBackOffice.value && !filters.reason.trim()) {
+    if (notify === true) ElMessage.warning('请先填写查询原因，再点击查询')
+    return
+  }
   loading.value = true
   try {
     const params = {
@@ -133,6 +150,7 @@ async function load() {
     }
     if (filters.businessType) params.businessType = filters.businessType
     if (filters.status) params.status = filters.status
+    if (isBackOffice.value) params.reason = filters.reason.trim()
     const res = await listTransactions(params)
     if (res.code === 'SUCCEEDED') {
       rows.items = res.data.items || []
@@ -167,10 +185,24 @@ async function checkStatus(tradeNo) {
 
 function search() {
   rows.page = 1
+  load(true)
+}
+
+// 标签切换：后台身份在未填原因时直接清空，不弹提示也不发请求。
+function onTabChange() {
+  rows.page = 1
+  if (tab.value === 'initiated' && isBackOffice.value && !filters.reason.trim()) {
+    rows.items = []
+    rows.total = 0
+    return
+  }
   load()
 }
 
-onMounted(load)
+onMounted(() => {
+  // 后台身份必须有查询原因才查询，挂载时先不自动发请求。
+  if (!isBackOffice.value) load()
+})
 </script>
 
 <template>
@@ -178,10 +210,14 @@ onMounted(load)
     <h2 class="page-title">交易记录</h2>
 
     <el-card class="card-block" shadow="never">
-      <el-tabs v-model="tab" style="margin-bottom: 12px" @tab-change="search">
+      <el-tabs v-model="tab" style="margin-bottom: 12px" @tab-change="onTabChange">
         <el-tab-pane label="我发起的交易" name="initiated" />
         <el-tab-pane label="我收到的款项" name="received" />
       </el-tabs>
+
+      <div v-if="isBackOffice" class="backoffice-hint">
+        当前为后台账户：查询需要填写原因并写入审计，结果按账户授权范围返回。
+      </div>
 
       <div class="filters">
         <el-select v-model="filters.businessType" placeholder="业务类型" clearable style="width: 160px">
@@ -199,10 +235,23 @@ onMounted(load)
         >
           <el-option v-for="s in statusOptions" :key="s" :value="s" :label="statusLabel(s)" />
         </el-select>
+        <el-input
+          v-if="isBackOffice && tab === 'initiated'"
+          v-model="filters.reason"
+          placeholder="查询原因（后台必填）"
+          clearable
+          style="width: 240px"
+          @keyup.enter="search"
+        />
         <el-button type="primary" @click="search">查询</el-button>
       </div>
 
-      <el-table :data="rows.items" v-loading="loading" stripe>
+      <el-table
+        :data="rows.items"
+        v-loading="loading"
+        stripe
+        :empty-text="isBackOffice && tab === 'initiated' && !filters.reason.trim() ? '填写查询原因后点击查询' : '暂无数据'"
+      >
         <el-table-column prop="tradeNo" label="交易号" min-width="170" show-overflow-tooltip />
         <el-table-column label="业务类型" width="110">
           <template #default="{ row }">{{ businessTypeLabel(row.businessType) }}</template>
@@ -299,6 +348,14 @@ onMounted(load)
   display: flex;
   gap: 12px;
   margin-bottom: 12px;
+}
+.backoffice-hint {
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--bg-page);
+  font-size: 12px;
+  color: var(--text-muted);
 }
 .receipt-box {
   padding: 4px 0;
