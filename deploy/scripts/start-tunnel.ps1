@@ -1,5 +1,5 @@
 param(
-  [int]$Port = 18080,
+  [int]$Port = 8085,
   [string]$Cloudflared = 'cloudflared.exe'
 )
 

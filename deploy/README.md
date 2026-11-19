@@ -116,11 +116,11 @@ cd backend
 .\mvnw.cmd -pl account-service spring-boot:run
 .\mvnw.cmd -pl transaction-service spring-boot:run
 .\mvnw.cmd -pl risk-service spring-boot:run
-$env:SERVER_PORT = "18080"
+$env:SERVER_PORT = "8085"
 .\mvnw.cmd -pl gateway spring-boot:run
 ```
 
-`SERVER_PORT` 只在网关终端设置；前四个业务服务不要设，否则会全部绑到 18080 而只剩一个能起。
+`SERVER_PORT` 只在网关终端设置；前四个业务服务不要设，否则会全部绑到 8085 而只剩一个能起。
 
 启动顺序：MySQL → 建库与演示数据 → 四个业务服务 → 网关。网关最后起，避免路由到未就绪实例。
 
@@ -139,18 +139,18 @@ Get-Process java -ErrorAction SilentlyContinue | Stop-Process
 确认端口已释放：
 
 ```powershell
-Get-NetTCPConnection -LocalPort 8081,8082,8083,8084,18080 -State Listen -ErrorAction SilentlyContinue
+Get-NetTCPConnection -LocalPort 8081,8082,8083,8084,8085 -State Listen -ErrorAction SilentlyContinue
 ```
 
 ## 6. 健康检查
 
 | 组件 | 地址 |
 |---|---|
-| 网关 | `http://localhost:18080/actuator/health` |
-| user | `http://localhost:18080/api/v1/user/health` |
-| account | `http://localhost:18080/api/v1/account/health` |
-| transaction | `http://localhost:18080/api/v1/transaction/health` |
-| risk | `http://localhost:18080/api/v1/risk/health` |
+| 网关 | `http://localhost:8085/actuator/health` |
+| user | `http://localhost:8085/api/v1/user/health` |
+| account | `http://localhost:8085/api/v1/account/health` |
+| transaction | `http://localhost:8085/api/v1/transaction/health` |
+| risk | `http://localhost:8085/api/v1/risk/health` |
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File deploy/scripts/health-check.ps1
@@ -201,7 +201,7 @@ powershell -ExecutionPolicy Bypass -File deploy/scripts/backup-restore.ps1 -Mode
 
 | 现象 | 原因 | 处理 |
 |---|---|---|
-| 网关启动失败，端口占用 | 8080 被 `NI Application Web Server` 占用 | `SERVER_PORT=18080` |
+| 网关启动失败，端口占用 | 8080 被 `NI Application Web Server` 占用 | `SERVER_PORT=8085` |
 | PowerShell 执行 `<` 报错 | PowerShell 不支持输入重定向 | 用 Git Bash，或 `Get-Content x.sql \| mysql ...` |
 | 表数只有 11 | 非 root 账号查询 `information_schema` 被权限过滤 | 用 root 或全库 SELECT 账号查询 |
 | CHECK 数量为 0 | MySQL < 8.0.16 | 升级数据库；当前靠应用层校验 |

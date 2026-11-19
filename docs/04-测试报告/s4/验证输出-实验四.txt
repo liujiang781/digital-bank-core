@@ -389,3 +389,41 @@ LOGIN UID-000001 -> code=SUCCEEDED token=dRK5R6Sqz7...
   记账校验      : 50000.00 -> 50100.00，increased_by = 100.00，flow_count = 1
 
 结论：合并 main 后 16 表 16 外键，DEP-S4-001/002 通过；其余用例结论不变。
+================================================================================
+第 15 节  网关端口对齐 S1（18080 -> 8085）
+时间：2026-11-19  基线：main@75ddc06（合并 PR #41 后）
+================================================================================
+
+【改动】按组内口径把网关端口从 18080 改为 8085：
+  - deploy/scripts/start-all.ps1、health-check.ps1、start-tunnel.ps1 默认值
+  - deploy/.env.example
+  - deploy/README.md、部署方案.md、S4-部署与数据库验证记录.md
+
+【实跑】health-check.ps1（原始输出见 docs/04-测试报告/s4/verify-output-8085.txt）
+  [PASS] gateway             200 {"status":"UP"}
+  [PASS] user-service        200 请求成功
+  [PASS] account-service     200 请求成功
+  [PASS] transaction-service 200 请求成功
+  [PASS] risk-service        200 请求成功
+  5/5 PASS，退出码 0
+
+【缺陷】DEF-S4-004（阻塞，归属 S1）
+  现象：POST /api/v1/auth/login 返回 503
+        {"code":"SERVICE_UNAVAILABLE","message":"授权存储暂时不可用"}
+  定位：
+    1. 失败点为 staff_authorization 的 SELECT ... FOR UPDATE（S1 新增代码）
+    2. performance_schema.events_statements_history 中无任何非零错误码
+       说明异常未到达 MySQL 服务端，属客户端连接/事务层
+    3. 已排除：表结构（identity_id/role_id/version/updated_at 齐全）、
+       账号匹配（mysql.user 中仅 bank_user@% 一个账号）、
+       表级授权（staff_authorization / staff_account_scope 均为 SIUD）、
+       认证插件（mysql_native_password，排除 RSA 公钥问题）、
+       连接目标库（BANK_DB_URL 指向 payment_db）
+    4. StaffAuthorizationService 第 35-38 行 catch (DataAccessException)
+       未记录异常原因，真实错误被吞掉
+  建议 S1：
+    - catch 中补 log.error 输出 failure，或临时开启 DEBUG 暴露根因
+    - 排查 UserManagementRepository 注入的 JdbcTemplate / TransactionTemplate
+      是否确实指向 auth.database 数据源
+  对照：合并前基线 main@abc6c62 上，UID-000001/demo123 经 18080 登录与
+  存款冒烟均为 SUCCEEDED（见第 13 节），说明该问题由本次合并引入。

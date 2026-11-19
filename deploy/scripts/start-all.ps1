@@ -3,7 +3,7 @@
 param(
     [string]$BackendDir = '',
     [string]$EnvFile = '',
-    [string]$GatewayPort = '18080',
+    [string]$GatewayPort = '8085',
     [int]$TimeoutSec = 180
 )
 

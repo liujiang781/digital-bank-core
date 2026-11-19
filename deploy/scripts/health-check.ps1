@@ -1,7 +1,7 @@
 # Requires: Windows PowerShell 5.1+
 # Usage: powershell -ExecutionPolicy Bypass -File deploy/scripts/health-check.ps1
 param(
-    [string]$GatewayPort = '18080'
+    [string]$GatewayPort = '8085'
 )
 
 $targets = @(

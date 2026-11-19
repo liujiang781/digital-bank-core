@@ -35,8 +35,13 @@ ALTER USER 's2_readonly'@'%' IDENTIFIED BY '$RO';
 CREATE USER IF NOT EXISTS 's2_exp4_test'@'%' IDENTIFIED BY '$TEST';
 ALTER USER 's2_exp4_test'@'%' IDENTIFIED BY '$TEST';
 
-GRANT SELECT ON payment_db.customer TO 'bank_user'@'%';
-GRANT SELECT ON payment_db.credential TO 'bank_user'@'%';
+GRANT SELECT, INSERT, UPDATE ON payment_db.customer TO 'bank_user'@'%';
+GRANT SELECT, INSERT, UPDATE ON payment_db.credential TO 'bank_user'@'%';
+GRANT SELECT, INSERT, UPDATE ON payment_db.user_command TO 'bank_user'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE ON payment_db.staff_authorization TO 'bank_user'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE ON payment_db.staff_account_scope TO 'bank_user'@'%';
+GRANT SELECT, INSERT ON payment_db.audit_log TO 'bank_user'@'%';
+GRANT SELECT ON payment_db.account TO 'bank_user'@'%';
 
 GRANT SELECT, INSERT, UPDATE ON payment_db.account TO 'account_service'@'%';
 GRANT SELECT, INSERT, UPDATE ON payment_db.account_command TO 'account_service'@'%';
