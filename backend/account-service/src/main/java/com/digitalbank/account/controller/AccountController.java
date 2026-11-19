@@ -42,6 +42,15 @@ public class AccountController {
         return ok(accounts.list(access.requireActor(request), page, pageSize), request);
     }
 
+    // 后台按授权范围查账户（独立接口）。字面量路径比 /{accountId} 更具体，Spring 会优先匹配这里。
+    // 后台查询必须带 reason，服务端写入 audit_log；普通客户调用返回 403。
+    @GetMapping("/scoped")
+    public ApiResponse<Page<AccountView>> scoped(@RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int pageSize, @RequestParam(required = false) String reason,
+            HttpServletRequest request) {
+        return ok(accounts.scoped(access.requireActor(request), page, pageSize, reason), request);
+    }
+
     @GetMapping("/{accountId}")
     public ApiResponse<AccountView> get(@PathVariable String accountId, HttpServletRequest request) {
         return ok(accounts.get(access.requireActor(request), accountId), request);

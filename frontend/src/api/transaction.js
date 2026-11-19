@@ -55,9 +55,10 @@ export function transfer({
  * 查询交易结果（UC-TR-05，P0）
  * GET /api/v1/transactions/{tradeNo}
  * 客户触发查询还会发起一次渠道核对（帮助 UNKNOWN/RECOVERING 收敛）
+ * 后台身份（运营/风控）必须传 params.reason，服务端会写入审计；详情返回 accountId。
  */
-export function getTransaction(tradeNo) {
-  return http.get(`/transactions/${encodeURIComponent(tradeNo)}`)
+export function getTransaction(tradeNo, params = {}) {
+  return http.get(`/transactions/${encodeURIComponent(tradeNo)}`, { params })
 }
 
 /**
@@ -71,9 +72,10 @@ export function listTransactions(params = {}) {
 /**
  * 下载交易回单（UC-TR-07，P2，仅成功交易）
  * GET /api/v1/transactions/{tradeNo}/receipt
+ * 后台身份必须传 params.reason，服务端会写入审计。
  */
-export function getReceipt(tradeNo) {
-  return http.get(`/transactions/${encodeURIComponent(tradeNo)}/receipt`)
+export function getReceipt(tradeNo, params = {}) {
+  return http.get(`/transactions/${encodeURIComponent(tradeNo)}/receipt`, { params })
 }
 
 /**

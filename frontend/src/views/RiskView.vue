@@ -5,7 +5,8 @@ import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   listRules, submitRuleChange, listChanges, approveChange,
-  listRiskEntries, submitListChange, disposeAlert, listRiskEvents
+  listRiskEntries, submitListChange, disposeAlert, listRiskEvents,
+  listScopedAccounts, approveFreezeRelease
 } from '../api/ops'
 import { newRequestId } from '../utils/requestId'
 import { useSessionStore } from '../stores/session'
@@ -39,6 +40,11 @@ const listDialog = ref(false)
 const events = ref([])
 const eventsLoading = ref(false)
 const eventQuery = reactive({ result: '', reasonCode: '', reason: '' })
+
+// 风控冻结解除审批（运营解冻的前置步骤）：列出授权范围内缺少解除结论的 RISK 冻结
+const releaseQuery = reactive({ reason: '' })
+const releaseRows = ref([])
+const releaseLoading = ref(false)
 
 async function loadRules() {
   rulesLoading.value = true
@@ -175,11 +181,70 @@ async function dispose(row) {
   } catch (e) { ElMessage.error(e.message || '网络异常') }
 }
 
+async function loadReleaseRows() {
+  const reason = releaseQuery.reason.trim()
+  if (!reason) {
+    ElMessage.warning('请先填写查询原因，再查询待解除的风控冻结')
+    return
+  }
+  releaseLoading.value = true
+  try {
+    const res = await listScopedAccounts({ page: 1, pageSize: 100, reason })
+    if (res.code !== 'SUCCEEDED') {
+      ElMessage.error(res.message || '授权范围账户查询失败')
+      return
+    }
+    const rows = []
+    for (const acc of res.data?.items || []) {
+      for (const r of acc.restrictions || []) {
+        if (r.source === 'RISK' && !r.releaseApproved) {
+          rows.push({ accountId: acc.accountId, restrictionId: r.restrictionId, reason: r.reason })
+        }
+      }
+    }
+    releaseRows.value = rows
+  } catch (e) {
+    ElMessage.error(e.message || '网络异常')
+  } finally {
+    releaseLoading.value = false
+  }
+}
+
+async function approveRelease(row) {
+  let basis = ''
+  try {
+    const answer = await ElMessageBox.prompt(
+      `为账户 ${row.accountId} 的冻结原因 #${row.restrictionId} 出具解除结论，请输入依据`,
+      '风控解除审批',
+      { inputValidator: (v) => !!v?.trim() || '依据不能为空' }
+    )
+    basis = answer.value
+  } catch {
+    return
+  }
+  try {
+    const res = await approveFreezeRelease(row.accountId, row.restrictionId, { basis })
+    if (res.code === 'SUCCEEDED') {
+      ElMessage.success('解除结论已登记，运营可继续执行解冻')
+      loadReleaseRows()
+    } else {
+      ElMessage.error(res.message || '解除审批失败')
+    }
+  } catch (e) {
+    ElMessage.error(e.message || '网络异常')
+  }
+}
+
 function refresh() {
   if (tab.value === 'rules') loadRules()
   else if (tab.value === 'changes') loadChanges()
   else if (tab.value === 'lists') loadEntries()
   else if (tab.value === 'events') { loadEvents(); loadChanges() }
+  else if (tab.value === 'release') {
+    // 后台查询需要原因，未填时只清空列表，不自动发请求。
+    if (releaseQuery.reason.trim()) loadReleaseRows()
+    else releaseRows.value = []
+  }
 }
 
 onMounted(() => { loadRules(); loadChanges() })
@@ -273,6 +338,31 @@ onMounted(() => { loadRules(); loadChanges() })
             <el-table-column label="操作" width="100" fixed="right">
               <template #default="{ row }">
                 <el-button v-if="session.canWriteRisk && row.result === 'REJECT'" link type="primary" @click="dispose(row)">处置</el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </el-tab-pane>
+
+        <!-- 风控冻结解除审批（运营解冻的前置步骤） -->
+        <el-tab-pane label="冻结解除审批" name="release">
+          <div class="filters">
+            <el-input
+              v-model="releaseQuery.reason"
+              placeholder="查询原因（后台必填）"
+              style="width: 240px"
+              @keyup.enter="loadReleaseRows"
+            />
+            <el-button type="primary" @click="loadReleaseRows">查询待解除冻结</el-button>
+            <span class="readonly-hint">运营解冻前，风控须对每条 RISK 冻结给出解除结论</span>
+          </div>
+          <el-table :data="releaseRows" v-loading="releaseLoading" stripe empty-text="填写查询原因后点击查询">
+            <el-table-column prop="accountId" label="账户编号" min-width="150" />
+            <el-table-column prop="restrictionId" label="限制编号" width="120" />
+            <el-table-column prop="reason" label="冻结原因" min-width="220" show-overflow-tooltip />
+            <el-table-column label="操作" width="140" fixed="right">
+              <template #default="{ row }">
+                <el-button v-if="session.canWriteRisk" link type="primary" @click="approveRelease(row)">解除审批</el-button>
+                <span v-else>—</span>
               </template>
             </el-table-column>
           </el-table>

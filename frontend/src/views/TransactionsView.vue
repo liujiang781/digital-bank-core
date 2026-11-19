@@ -32,18 +32,37 @@ const rows = reactive({ items: [], total: 0, page: 1, pageSize: 20 })
 const filters = reactive({ businessType: '', status: '', reason: '' })
 const checking = reactive({})
 
+// 后台身份的详情/回单/流水查询都要带查询原因，服务端会写审计。
+// 没填原因就先提示，不发请求，避免服务端拒绝后弹错。
+function queryParams() {
+  if (!isBackOffice.value) return {}
+  if (!filters.reason.trim()) {
+    ElMessage.warning('请先填写查询原因，再点击查询')
+    return null
+  }
+  return { reason: filters.reason.trim() }
+}
+
 // UC-TR-07 交易回单
 const receiptVisible = ref(false)
 const receipt = ref(null)
 const receiptLoading = ref(false)
 
+// UC-TR-06 按交易号查看对应账户资金流水
+const entriesVisible = ref(false)
+const entriesLoading = ref(false)
+const entriesRows = ref([])
+const entriesTradeNo = ref('')
+
 // UC-TR-08 核对 / UC-TR-09 恢复（运营授权，后端校验角色）
 const actionLoading = reactive({})
 
 async function showReceipt(tradeNo) {
+  const params = queryParams()
+  if (params === null) return
   receiptLoading.value = true
   try {
-    const res = await getReceipt(tradeNo)
+    const res = await getReceipt(tradeNo, params)
     if (res.code === 'SUCCEEDED') {
       receipt.value = res.data
       receiptVisible.value = true
@@ -167,9 +186,11 @@ async function load(notify = false) {
 
 // 查询最新状态：客户触发的查询还会发起一次渠道核对（帮助 UNKNOWN/RECOVERING 收敛）
 async function checkStatus(tradeNo) {
+  const params = queryParams()
+  if (params === null) return
   checking[tradeNo] = true
   try {
-    const res = await getTransaction(tradeNo)
+    const res = await getTransaction(tradeNo, params)
     if (res.code === 'SUCCEEDED' || res.data) {
       ElMessage.success(`${tradeNo}：${statusLabel(res.data?.status)}（${res.message || '已查询'}）`)
       await load()
@@ -180,6 +201,32 @@ async function checkStatus(tradeNo) {
     ElMessage.error(e.message || '网络异常')
   } finally {
     checking[tradeNo] = false
+  }
+}
+
+// 用详情返回的 accountId 和 tradeNo 打开该笔交易对应的账户资金流水（BR-19）。
+// 后台身份同样要带查询原因，账户服务会把账户、交易号和原因写进审计。
+async function showEntries(tradeNo) {
+  const params = queryParams()
+  if (params === null) return
+  entriesTradeNo.value = tradeNo
+  entriesRows.value = []
+  entriesVisible.value = true
+  entriesLoading.value = true
+  try {
+    const detail = await getTransaction(tradeNo, params)
+    const accountId = detail.data?.accountId
+    if (!accountId) {
+      ElMessage.error(detail.message || '交易详情未返回账户编号')
+      return
+    }
+    const res = await getFundEntries(accountId, { ...params, tradeNo, page: 1, pageSize: 50 })
+    if (res.code === 'SUCCEEDED') entriesRows.value = res.data?.items || []
+    else ElMessage.error(res.message || '流水查询失败')
+  } catch (e) {
+    ElMessage.error(e.message || '网络异常')
+  } finally {
+    entriesLoading.value = false
   }
 }
 
@@ -273,7 +320,7 @@ onMounted(() => {
           <template #default="{ row }">+{{ formatAmount(row.amount) }}</template>
         </el-table-column>
         <el-table-column prop="createdAt" label="时间" min-width="170" />
-        <el-table-column v-if="tab === 'initiated'" label="操作" width="260" fixed="right">
+        <el-table-column v-if="tab === 'initiated'" label="操作" width="330" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="!isFinalStatus(row.status)"
@@ -308,6 +355,13 @@ onMounted(() => {
             >
               恢复
             </el-button>
+            <el-button
+              size="small"
+              :loading="entriesLoading && entriesTradeNo === row.tradeNo"
+              @click="showEntries(row.tradeNo)"
+            >
+              流水
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -340,6 +394,26 @@ onMounted(() => {
       </div>
       <template #footer>
         <el-button @click="receiptVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- UC-TR-06 该笔交易对应的账户资金流水 -->
+    <el-dialog v-model="entriesVisible" :title="`资金流水 · ${entriesTradeNo}`" width="760px">
+      <el-table :data="entriesRows" v-loading="entriesLoading" stripe empty-text="该交易暂无资金流水">
+        <el-table-column prop="entryId" label="流水编号" min-width="150" show-overflow-tooltip />
+        <el-table-column prop="tradeNo" label="交易号" min-width="150" show-overflow-tooltip />
+        <el-table-column prop="entryRole" label="角色" width="140" />
+        <el-table-column prop="direction" label="方向" width="90" />
+        <el-table-column label="金额" width="120" align="right">
+          <template #default="{ row }">{{ formatAmount(row.amount) }}</template>
+        </el-table-column>
+        <el-table-column label="记账后余额" width="130" align="right">
+          <template #default="{ row }">{{ row.bookBalanceAfter ? formatAmount(row.bookBalanceAfter) : '—' }}</template>
+        </el-table-column>
+        <el-table-column prop="occurredAt" label="时间" min-width="170" />
+      </el-table>
+      <template #footer>
+        <el-button @click="entriesVisible = false">关闭</el-button>
       </template>
     </el-dialog>
   </div>
