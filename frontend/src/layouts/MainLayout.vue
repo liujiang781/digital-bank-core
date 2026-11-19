@@ -1,7 +1,7 @@
 <script setup>
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Wallet, Plus, Minus, Switch, List } from '@element-plus/icons-vue'
+import { Wallet, Plus, Minus, Switch, List, User, OfficeBuilding, Lock } from '@element-plus/icons-vue'
 import { useSessionStore } from '../stores/session'
 import { logout } from '../api/auth'
 
@@ -36,23 +36,40 @@ async function handleLogout() {
     </el-header>
     <el-container>
       <el-aside width="210px" class="layout-aside">
-        <div class="aside-label">业务办理</div>
+        <div class="aside-label">{{ session.isBackOffice ? '查询与资料' : '业务办理' }}</div>
         <el-menu :default-active="$route.path" router>
-          <el-menu-item index="/accounts">
-            <el-icon><Wallet /></el-icon><span>我的账户</span>
-          </el-menu-item>
-          <el-menu-item index="/deposit">
-            <el-icon><Plus /></el-icon><span>存款</span>
-          </el-menu-item>
-          <el-menu-item index="/withdraw">
-            <el-icon><Minus /></el-icon><span>取款</span>
-          </el-menu-item>
-          <el-menu-item index="/transfer">
-            <el-icon><Switch /></el-icon><span>转账</span>
-          </el-menu-item>
+          <!-- 员工账号没有个人银行业务，不显示我的账户/存款/取款/转账 -->
+          <template v-if="!session.isBackOffice">
+            <el-menu-item index="/accounts">
+              <el-icon><Wallet /></el-icon><span>我的账户</span>
+            </el-menu-item>
+            <el-menu-item index="/deposit">
+              <el-icon><Plus /></el-icon><span>存款</span>
+            </el-menu-item>
+            <el-menu-item index="/withdraw">
+              <el-icon><Minus /></el-icon><span>取款</span>
+            </el-menu-item>
+            <el-menu-item index="/transfer">
+              <el-icon><Switch /></el-icon><span>转账</span>
+            </el-menu-item>
+          </template>
           <el-menu-item index="/transactions">
             <el-icon><List /></el-icon><span>交易记录</span>
           </el-menu-item>
+          <el-menu-item index="/profile">
+            <el-icon><User /></el-icon><span>个人资料</span>
+          </el-menu-item>
+
+          <!-- 后台入口只给有对应角色的账号显示；服务端仍会独立校验权限 -->
+          <template v-if="session.isOpsAdmin || session.isOpsRisk">
+            <div class="aside-label aside-label-second">后台管理</div>
+            <el-menu-item v-if="session.isOpsAdmin" index="/ops">
+              <el-icon><OfficeBuilding /></el-icon><span>运营管理</span>
+            </el-menu-item>
+            <el-menu-item v-if="session.isOpsRisk" index="/risk">
+              <el-icon><Lock /></el-icon><span>风险控制</span>
+            </el-menu-item>
+          </template>
         </el-menu>
       </el-aside>
       <el-main>
@@ -127,6 +144,11 @@ async function handleLogout() {
   font-size: 11px;
   color: var(--text-muted);
   letter-spacing: 2px;
+}
+.aside-label-second {
+  padding-top: 16px;
+  border-top: 1px solid var(--border-soft);
+  margin-top: 12px;
 }
 .layout-aside :deep(.el-menu) {
   border-right: none;

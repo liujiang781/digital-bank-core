@@ -72,6 +72,7 @@ CREATE TABLE IF NOT EXISTS risk_list_entry (
     rule_version INT NOT NULL DEFAULT 1 COMMENT '条目版本',
     change_id VARCHAR(64) DEFAULT NULL COMMENT '最近一次生效的变更单号',
     created_by VARCHAR(64) NOT NULL COMMENT '创建人身份',
+    approved_by VARCHAR(64) DEFAULT NULL COMMENT '审批人身份(RiskListService.list 查询需要)',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (id),

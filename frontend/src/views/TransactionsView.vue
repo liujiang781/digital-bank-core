@@ -1,9 +1,11 @@
 <script setup>
 // 交易记录页（UC-TR-05 列表形态）
 // 非终态（PROCESSING/UNKNOWN/RECOVERING）交易可点击"查询状态"触发渠道核对收敛。
-import { onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { listTransactions, getTransaction } from '../api/transaction'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import {
+  listTransactions, getTransaction, getReceipt, reconcileTrade, recoverTrade
+} from '../api/transaction'
 import { listAccounts, getFundEntries } from '../api/account'
 import {
   statusLabel,
@@ -12,11 +14,79 @@ import {
   businessTypeLabel
 } from '../utils/status'
 import { formatAmount } from '../utils/money'
+import { useSessionStore } from '../stores/session'
+
+const session = useSessionStore()
+
+// 后台身份（运营/风控）查交易必须带查询原因，服务端会写入审计。
+// 这里只按角色判断，不依赖 accountScope：旧会话可能没有该字段，
+// 若判成 false 会在挂载时自动查询而被服务端拒绝，重新出现弹错。
+// 角色判 true 但服务端按普通客户处理时，多传的 reason 会被忽略，不影响结果。
+const isBackOffice = computed(() => {
+  const roles = session.roles || []
+  return roles.includes('OPERATIONS') || roles.includes('RISK')
+})
 
 const loading = ref(false)
 const rows = reactive({ items: [], total: 0, page: 1, pageSize: 20 })
-const filters = reactive({ businessType: '', status: '' })
+const filters = reactive({ businessType: '', status: '', reason: '' })
 const checking = reactive({})
+
+// UC-TR-07 交易回单
+const receiptVisible = ref(false)
+const receipt = ref(null)
+const receiptLoading = ref(false)
+
+// UC-TR-08 核对 / UC-TR-09 恢复（运营授权，后端校验角色）
+const actionLoading = reactive({})
+
+async function showReceipt(tradeNo) {
+  receiptLoading.value = true
+  try {
+    const res = await getReceipt(tradeNo)
+    if (res.code === 'SUCCEEDED') {
+      receipt.value = res.data
+      receiptVisible.value = true
+    } else {
+      ElMessage.error(res.message || '回单生成失败')
+    }
+  } catch (e) {
+    ElMessage.error(e.message || '网络异常')
+  } finally {
+    receiptLoading.value = false
+  }
+}
+
+async function doAction(tradeNo, kind) {
+  const label = kind === 'reconcile' ? '核对待确认交易' : '重试资金恢复'
+  let reason = ''
+  try {
+    const answer = await ElMessageBox.prompt(
+      `${label}：${tradeNo}。请输入操作原因（必填，将写入审计）。`,
+      label,
+      { confirmButtonText: '确认', cancelButtonText: '取消', inputValidator: (v) => !!v?.trim() || '原因不能为空' }
+    )
+    reason = answer.value
+  } catch {
+    return
+  }
+  actionLoading[tradeNo + kind] = true
+  try {
+    const api = kind === 'reconcile' ? reconcileTrade : recoverTrade
+    const res = await api(tradeNo, { reason, requestId: crypto.randomUUID() })
+    if (res.code === 'SUCCEEDED') {
+      ElMessage.success(`${label}成功：${res.data?.status || '已提交'}`)
+      await load()
+    } else {
+      ElMessage.error(res.message || `${label}失败`)
+    }
+  } catch (e) {
+    ElMessage.error(e.message || '网络异常')
+  } finally {
+    actionLoading[tradeNo + kind] = false
+  }
+}
+
 // 后端 transaction 表只记发起方的原单，收款方查不到交易记录。
 // 收款方的入账在资金流水里，用「我收到的款项」标签单独展示。
 const tab = ref('initiated')
@@ -65,8 +135,13 @@ async function loadReceived() {
   }
 }
 
-async function load() {
+async function load(notify = false) {
   if (tab.value === 'received') return loadReceived()
+  // 后台身份查询是审计动作：没有查询原因就不发请求，避免服务端拒绝后弹错。
+  if (isBackOffice.value && !filters.reason.trim()) {
+    if (notify === true) ElMessage.warning('请先填写查询原因，再点击查询')
+    return
+  }
   loading.value = true
   try {
     const params = {
@@ -75,6 +150,7 @@ async function load() {
     }
     if (filters.businessType) params.businessType = filters.businessType
     if (filters.status) params.status = filters.status
+    if (isBackOffice.value) params.reason = filters.reason.trim()
     const res = await listTransactions(params)
     if (res.code === 'SUCCEEDED') {
       rows.items = res.data.items || []
@@ -109,10 +185,24 @@ async function checkStatus(tradeNo) {
 
 function search() {
   rows.page = 1
+  load(true)
+}
+
+// 标签切换：后台身份在未填原因时直接清空，不弹提示也不发请求。
+function onTabChange() {
+  rows.page = 1
+  if (tab.value === 'initiated' && isBackOffice.value && !filters.reason.trim()) {
+    rows.items = []
+    rows.total = 0
+    return
+  }
   load()
 }
 
-onMounted(load)
+onMounted(() => {
+  // 后台身份必须有查询原因才查询，挂载时先不自动发请求。
+  if (!isBackOffice.value) load()
+})
 </script>
 
 <template>
@@ -120,10 +210,16 @@ onMounted(load)
     <h2 class="page-title">交易记录</h2>
 
     <el-card class="card-block" shadow="never">
-      <el-tabs v-model="tab" style="margin-bottom: 12px" @tab-change="search">
+      <!-- 「我收到的款项」只对客户有意义：后台身份的个人账户列表是授权范围账户，
+           会把别人的入账显示成自己的收款，所以后台不显示该标签。 -->
+      <el-tabs v-if="!isBackOffice" v-model="tab" style="margin-bottom: 12px" @tab-change="onTabChange">
         <el-tab-pane label="我发起的交易" name="initiated" />
         <el-tab-pane label="我收到的款项" name="received" />
       </el-tabs>
+
+      <div v-if="isBackOffice" class="backoffice-hint">
+        当前为后台账户：查询需要填写原因并写入审计，结果按账户授权范围返回。
+      </div>
 
       <div class="filters">
         <el-select v-model="filters.businessType" placeholder="业务类型" clearable style="width: 160px">
@@ -141,10 +237,23 @@ onMounted(load)
         >
           <el-option v-for="s in statusOptions" :key="s" :value="s" :label="statusLabel(s)" />
         </el-select>
+        <el-input
+          v-if="isBackOffice && tab === 'initiated'"
+          v-model="filters.reason"
+          placeholder="查询原因（后台必填）"
+          clearable
+          style="width: 240px"
+          @keyup.enter="search"
+        />
         <el-button type="primary" @click="search">查询</el-button>
       </div>
 
-      <el-table :data="rows.items" v-loading="loading" stripe>
+      <el-table
+        :data="rows.items"
+        v-loading="loading"
+        stripe
+        :empty-text="isBackOffice && tab === 'initiated' && !filters.reason.trim() ? '填写查询原因后点击查询' : '暂无数据'"
+      >
         <el-table-column prop="tradeNo" label="交易号" min-width="170" show-overflow-tooltip />
         <el-table-column label="业务类型" width="110">
           <template #default="{ row }">{{ businessTypeLabel(row.businessType) }}</template>
@@ -164,7 +273,7 @@ onMounted(load)
           <template #default="{ row }">+{{ formatAmount(row.amount) }}</template>
         </el-table-column>
         <el-table-column prop="createdAt" label="时间" min-width="170" />
-        <el-table-column v-if="tab === 'initiated'" label="操作" width="130" fixed="right">
+        <el-table-column v-if="tab === 'initiated'" label="操作" width="260" fixed="right">
           <template #default="{ row }">
             <el-button
               v-if="!isFinalStatus(row.status)"
@@ -174,6 +283,30 @@ onMounted(load)
               @click="checkStatus(row.tradeNo)"
             >
               查询状态
+            </el-button>
+            <el-button
+              v-if="row.status === 'SUCCESS'"
+              size="small"
+              :loading="receiptLoading && receipt?.tradeNo === row.tradeNo"
+              @click="showReceipt(row.tradeNo)"
+            >
+              回单
+            </el-button>
+            <el-button
+              v-if="row.status === 'UNKNOWN'"
+              size="small"
+              :loading="actionLoading[row.tradeNo + 'reconcile']"
+              @click="doAction(row.tradeNo, 'reconcile')"
+            >
+              核对
+            </el-button>
+            <el-button
+              v-if="row.status === 'RECOVERING'"
+              size="small"
+              :loading="actionLoading[row.tradeNo + 'recover']"
+              @click="doAction(row.tradeNo, 'recover')"
+            >
+              恢复
             </el-button>
           </template>
         </el-table-column>
@@ -188,6 +321,27 @@ onMounted(load)
         @current-change="load"
       />
     </el-card>
+
+    <!-- UC-TR-07 交易回单（模拟凭证） -->
+    <el-dialog v-model="receiptVisible" title="交易回单（教学模拟）" width="480px">
+      <div v-if="receipt" class="receipt-box">
+        <div class="receipt-no">{{ receipt.receiptNo }}</div>
+        <el-descriptions :column="1" border>
+          <el-descriptions-item label="交易号">{{ receipt.tradeNo }}</el-descriptions-item>
+          <el-descriptions-item label="业务类型">{{ businessTypeLabel(receipt.businessType) }}</el-descriptions-item>
+          <el-descriptions-item label="状态">{{ statusLabel(receipt.status) }}</el-descriptions-item>
+          <el-descriptions-item label="金额">{{ formatAmount(receipt.amount) }} {{ receipt.currency }}</el-descriptions-item>
+          <el-descriptions-item label="账户">{{ receipt.accountId }}</el-descriptions-item>
+          <el-descriptions-item label="渠道凭证">{{ receipt.channelEvidenceId || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="完成时间">{{ receipt.completedAt || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="签发时间">{{ receipt.issuedAt || '—' }}</el-descriptions-item>
+        </el-descriptions>
+        <div v-if="receipt.notice" class="receipt-notice">{{ receipt.notice }}</div>
+      </div>
+      <template #footer>
+        <el-button @click="receiptVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -196,5 +350,33 @@ onMounted(load)
   display: flex;
   gap: 12px;
   margin-bottom: 12px;
+}
+.backoffice-hint {
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: var(--bg-page);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.receipt-box {
+  padding: 4px 0;
+}
+.receipt-no {
+  text-align: center;
+  font-family: Consolas, Menlo, monospace;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--brand-primary);
+  margin-bottom: 14px;
+  letter-spacing: 1px;
+}
+.receipt-notice {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--bg-page);
+  border-radius: 6px;
+  font-size: 12px;
+  color: var(--text-muted);
 }
 </style>

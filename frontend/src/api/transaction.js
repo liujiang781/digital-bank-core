@@ -75,3 +75,19 @@ export function listTransactions(params = {}) {
 export function getReceipt(tradeNo) {
   return http.get(`/transactions/${encodeURIComponent(tradeNo)}/receipt`)
 }
+
+/**
+ * 核对待确认交易（UC-TR-08，P1，运营授权）
+ * POST /api/v1/transactions/{tradeNo}/reconcile
+ */
+export function reconcileTrade(tradeNo, { reason, requestId }) {
+  return http.post(`/transactions/${encodeURIComponent(tradeNo)}/reconcile`, { reason, requestId })
+}
+
+/**
+ * 重试资金恢复（UC-TR-09，P1，运营授权）
+ * POST /api/v1/transactions/{tradeNo}/recover
+ */
+export function recoverTrade(tradeNo, { reason, requestId }) {
+  return http.post(`/transactions/${encodeURIComponent(tradeNo)}/recover`, { reason, requestId })
+}
