@@ -36,20 +36,23 @@ async function handleLogout() {
     </el-header>
     <el-container>
       <el-aside width="210px" class="layout-aside">
-        <div class="aside-label">业务办理</div>
+        <div class="aside-label">{{ session.isBackOffice ? '查询与资料' : '业务办理' }}</div>
         <el-menu :default-active="$route.path" router>
-          <el-menu-item index="/accounts">
-            <el-icon><Wallet /></el-icon><span>我的账户</span>
-          </el-menu-item>
-          <el-menu-item index="/deposit">
-            <el-icon><Plus /></el-icon><span>存款</span>
-          </el-menu-item>
-          <el-menu-item index="/withdraw">
-            <el-icon><Minus /></el-icon><span>取款</span>
-          </el-menu-item>
-          <el-menu-item index="/transfer">
-            <el-icon><Switch /></el-icon><span>转账</span>
-          </el-menu-item>
+          <!-- 员工账号没有个人银行业务，不显示我的账户/存款/取款/转账 -->
+          <template v-if="!session.isBackOffice">
+            <el-menu-item index="/accounts">
+              <el-icon><Wallet /></el-icon><span>我的账户</span>
+            </el-menu-item>
+            <el-menu-item index="/deposit">
+              <el-icon><Plus /></el-icon><span>存款</span>
+            </el-menu-item>
+            <el-menu-item index="/withdraw">
+              <el-icon><Minus /></el-icon><span>取款</span>
+            </el-menu-item>
+            <el-menu-item index="/transfer">
+              <el-icon><Switch /></el-icon><span>转账</span>
+            </el-menu-item>
+          </template>
           <el-menu-item index="/transactions">
             <el-icon><List /></el-icon><span>交易记录</span>
           </el-menu-item>

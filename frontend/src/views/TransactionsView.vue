@@ -210,7 +210,9 @@ onMounted(() => {
     <h2 class="page-title">交易记录</h2>
 
     <el-card class="card-block" shadow="never">
-      <el-tabs v-model="tab" style="margin-bottom: 12px" @tab-change="onTabChange">
+      <!-- 「我收到的款项」只对客户有意义：后台身份的个人账户列表是授权范围账户，
+           会把别人的入账显示成自己的收款，所以后台不显示该标签。 -->
+      <el-tabs v-if="!isBackOffice" v-model="tab" style="margin-bottom: 12px" @tab-change="onTabChange">
         <el-tab-pane label="我发起的交易" name="initiated" />
         <el-tab-pane label="我收到的款项" name="received" />
       </el-tabs>

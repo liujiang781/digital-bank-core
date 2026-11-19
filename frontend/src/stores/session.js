@@ -17,6 +17,12 @@ export const useSessionStore = defineStore('session', {
     // 运营管理只给 OPS-ADMIN，风险控制只给 OPS-RISK。
     isOpsAdmin: (state) => state.customer?.identityId === 'OPS-ADMIN',
     isOpsRisk: (state) => state.customer?.identityId === 'OPS-RISK',
+    // 后台身份：运营或风控员工。员工账号没有个人银行业务，
+    // 菜单与路由据此隐藏「我的账户/存款/取款/转账」。
+    isBackOffice: (state) => {
+      const roles = state.customer?.roles || []
+      return roles.includes('OPERATIONS') || roles.includes('RISK')
+    },
     // 风控写权限：仅 RISK，且需非空账户范围（与后端 requireRiskWriter 一致）
     canWriteRisk: (state) => {
       const roles = state.customer?.roles || []
