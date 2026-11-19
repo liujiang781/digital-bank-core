@@ -235,3 +235,32 @@ powershell -ExecutionPolicy Bypass -File deploy/scripts/backup-restore.ps1 -Mode
 - `schema.sql` 当前为 16 张表、16 条外键（S1 新增 `user_command`、`staff_authorization`、`staff_account_scope`）
 - 管理员与员工认证样例见 `auth-admin.example.yml`、`auth-staff.example.yml`
 - S1 接口与授权说明见 `docs/04-测试报告/s1/S1-用户管理接口交接.md`
+
+## S2/S3 增量与后台查询改造（2026-11-19）
+
+已有库在启动新版本服务前，按顺序执行（全新库用 `deploy/sql/schema.sql` 一次建全）：
+
+1. `deploy/sql/s1-incremental.sql`
+2. `backend/account-service/src/main/resources/db/s2-incremental.sql`
+3. `backend/transaction-service/src/main/resources/db/s3-incremental.sql`
+4. `backend/risk-service/src/main/resources/db/s3-risk-incremental.sql`
+5. `deploy/sql/s2-requirement-gaps-incremental.sql`（新增 `risk_freeze_release` 风控解除结论表）
+
+第 5 个是本次新增，缺少该表会让风控解除审批报 500。前 4 个已执行过的库不必重跑；
+第 3 个含 `ALTER TABLE audit_log DROP CHECK`，重复执行会报"约束不存在"。
+改完后端源码必须重新 `mvnw.cmd clean install` 并重启服务，否则新接口仍是 404。
+
+| 接口 | 说明 |
+|---|---|
+| `GET /api/v1/accounts` | 我的账户，只返回 `customer_id` 本人账户；授权范围账户不再并入。 |
+| `GET /api/v1/accounts/scoped?reason=&page=&pageSize=` | 新增。后台按授权范围查账户，`reason` 必填（≤200 字），写 `BACKOFFICE_ACCOUNTS_QUERY` 审计，仅 OPERATIONS/RISK。 |
+| `GET /api/v1/transactions/{tradeNo}`、`/receipt` | 后台身份必须带 `reason`（≤255 字）；详情返回 `accountId`。 |
+| `GET /api/v1/accounts/{id}/fund-entries` | 支持 `tradeNo` 过滤；后台身份必须带 `reason`（≤200 字）。 |
+| `POST /api/v1/accounts/{id}/unfreeze` | `resolvedRestrictionIds` 必须覆盖全部有效限制；RISK 来源须先有解除结论。 |
+| `POST /api/v1/risk/accounts/{id}/restrictions/{rid}/release-approval` | 风控登记解除结论，请求体 `{"basis":"..."}`。 |
+
+服务账号授权无需改动：`account_service` 已有 `account` 读权限和 `audit_log` 写权限，
+`risk_service` 已有 `risk_freeze_release` 读写权限（见第 4 节）。
+
+前端对应入口：运营管理「按授权范围查账户」、风险控制「冻结解除审批」、
+交易记录「流水」按钮与查询原因输入框。
