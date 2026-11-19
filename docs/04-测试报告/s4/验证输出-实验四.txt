@@ -427,3 +427,177 @@ LOGIN UID-000001 -> code=SUCCEEDED token=dRK5R6Sqz7...
       是否确实指向 auth.database 数据源
   对照：合并前基线 main@abc6c62 上，UID-000001/demo123 经 18080 登录与
   存款冒烟均为 SUCCEEDED（见第 13 节），说明该问题由本次合并引入。
+
+================================================================================
+第 16 节  DEF-S4-004 根因确认与修复（2026-11-19 追加）
+时间：2026-11-19  基线：main@75ddc06 + 列级授权
+================================================================================
+
+【更正】第 15 节中“performance_schema 无错误码 => 异常未到达服务端”的推断不成立：
+  采样窗口内 user-service 实际并未运行，取到的是空样本。以探针直连数据库复测后，
+  服务端确实返回了明确错误码。
+
+【探针实测】JDBC 直连 payment_db，以 bank_user 身份执行 S1 的两条业务 SQL：
+  SELECT role_id, version FROM staff_authorization WHERE identity_id = ? FOR UPDATE
+    -> SQLState=42000  errorCode=1143  ER_COLUMNACCESS_DENIED_ERROR
+  SELECT account_id FROM staff_account_scope WHERE identity_id = ?
+    -> 普通 SELECT 正常
+
+  交叉验证（同一账号、同一库）：
+    credential        FOR UPDATE -> 1143
+    user_command      FOR UPDATE -> 1143
+    customer          FOR UPDATE -> 1143
+    staff_authorization FOR UPDATE -> 1143
+    account（仅表级 SELECT）     -> 1142
+    以上各表去掉 FOR UPDATE 的普通 SELECT -> 全部 OK
+
+【结论】MySQL 8.0.13 的锁读权限检查存在缺陷：表级 SELECT/UPDATE 已授予时，
+  SELECT ... FOR UPDATE 仍被判为列级越权（1143）。MySQL 8.0.14+ 已修复。
+  这不是 S1 的代码错误，也不是授权漏授，属环境版本限制。
+
+【修复】deploy/sql/exp4-grant.sh 在表级授权之后追加 8.0.13 兼容的列级授权：
+  GRANT SELECT (identity_id, role_id, version), UPDATE (identity_id, role_id, version)
+    ON payment_db.staff_authorization TO 'bank_user'@'%';
+  GRANT SELECT (identity_id, account_id), UPDATE (identity_id, account_id)
+    ON payment_db.staff_account_scope TO 'bank_user'@'%';
+  （升级到 8.0.14+ 后这两行可删除）
+
+【复测】POST /api/v1/auth/login，UID-000001 / demo123：
+  --- login via 8081 ---
+  code=SUCCEEDED identity= role= scope= tokenLen=43
+  --- login via 8085 ---
+  code=SUCCEEDED identity= role= scope= tokenLen=43
+
+【移交 S1】
+  1. StaffAuthorizationService 第 35-38 行 catch (DataAccessException) 补 log.error，
+     否则错误码被吞，只能靠探针定位。
+  2. readAuthorization 的 SELECT ... FOR UPDATE 建议改为基于 version 字段的乐观锁，
+     同时规避锁读性能问题与 8.0.13 权限缺陷。
+
+================================================================================
+第 17 节  MySQL 升级到 8.0.46 后复验（2026-11-19 晚）
+时间：2026-11-19  基线：main@75ddc06 + MySQL 8.0.46
+================================================================================
+
+【环境变更】MySQL Server 8.0.13 -> 8.0.46（MySQL Installer Upgrade，原地升级，
+  数据目录与账号保留；升级后 SELECT VERSION() 返回 8.0.46）。
+  随后重跑 deploy/sql/schema.sql（16 张表重建）与 init-data.sql（演示数据），
+  两条命令均无报错。
+
+【撤销 8.0.13 的列级授权补丁】执行：
+  REVOKE SELECT (identity_id, role_id, version), UPDATE (...) ON payment_db.staff_authorization ...
+  REVOKE SELECT (identity_id, account_id), UPDATE (...) ON payment_db.staff_account_scope ...
+
+  撤销后 bank_user 的 SHOW GRANTS 仅剩 7 条表级授权：
+    GRANT USAGE ON *.*
+    GRANT SELECT ON payment_db.account
+    GRANT SELECT, INSERT ON payment_db.audit_log
+    GRANT SELECT, INSERT, UPDATE ON payment_db.credential
+    GRANT SELECT, INSERT, UPDATE ON payment_db.customer
+    GRANT SELECT, INSERT, UPDATE, DELETE ON payment_db.staff_account_scope
+    GRANT SELECT, INSERT, UPDATE, DELETE ON payment_db.staff_authorization
+    GRANT SELECT, INSERT, UPDATE ON payment_db.user_command
+  information_schema.COLUMN_PRIVILEGES 中 staff_* 已为空。
+
+【探针实测 1：锁读恢复正常】
+  serverVersion=8.0.46
+  SELECT role_id, version FROM staff_authorization WHERE identity_id='UID-000001' FOR UPDATE
+    -> OK（不再报 1143；返回 0 行是因为该用户本来没有角色行，非权限问题）
+  结论：8.0.14 修复的锁读权限缺陷在 8.0.46 上确认不存在，列级补丁不再需要。
+
+【探针实测 2：CHECK 约束真实生效（行为验证，非仅计数）】
+  INSERT INTO customer(customer_id, identity_id, name, status)
+  VALUES ('PROBE6-BAD','PROBE6-BAD','probe','BOGUS');
+    -> CHECK ENFORCED  errorCode=3819  sqlState=HY000
+       Check constraint 'chk_customer_status' is violated.
+  事务回滚后 residual_rows=0，无脏数据。
+  结论：8.0.13 时代“CHECK 被解析后丢弃”的问题随升级消除，DEF-S4-001 关闭。
+  （schema.sql 中共 40 条 CONSTRAINT chk_*，本次已全部随建表入库。）
+
+【health-check.ps1】5/5 PASS，退出码 0
+  [PASS] gateway          200 {"status":"UP"}
+  [PASS] user-service     200 请求成功
+  [PASS] account-service  200 请求成功
+  [PASS] transaction-svc  200 请求成功
+  [PASS] risk-service     200 请求成功
+
+【登录冒烟】POST http://localhost:8085/api/v1/auth/login
+  body: {"identityId":"UID-000001","password":"demo123"}
+  -> {"code":"SUCCEEDED","data":{"token":"qUTO-...","tokenType":"Bearer",
+      "customer":{"customerId":"CUS-0001","identityId":"UID-000001",
+      "roles":[],"accountScope":[],"authorizationVersion":0}}}
+  token 长度 43。
+
+【存款冒烟】POST http://localhost:8085/api/v1/deposits
+  body: {"accountId":"ACC_S2_001","amount":"88.00","currency":"CNY",
+         "purpose":"S4 升级后冒烟","requestId":"<uuid>"}（X-Request-Id 与 requestId 一致）
+  -> {"code":"SUCCEEDED","data":{"tradeNo":"TRD202611198149F4A7","status":"SUCCESS"}}
+  余额查询 GET /api/v1/accounts/ACC_S2_001
+  -> bookBalance 50000.00 -> 50088.00，availableBalance 50088.00
+
+结论：升级 8.0.46 后 13 条验证的关键路径（健康检查 / 登录 / 存款 / 余额）
+  全部通过；DEF-S4-001、DEF-S4-004 均已关闭。
+
+【root 视角复验 verify-db.ps1】原始输出：docs/04-测试报告/s4/verify-output-20261119-191719.txt
+  mysql_version = 8.0.46，charset = utf8mb4，collation = utf8mb4_0900_ai_ci
+  table_count   = 16
+  fk_count      = 16
+  check_count   = 40（升级前为 0，DEF-S4-001 由此关闭）
+  风控 RK-02   : deposit_single_limit 50000.00 / outgoing_single_limit 10000.00 /
+                 outgoing_daily_limit 50000.00，enabled=1
+  余额不变式   : ACC_S2_001 50000.00 OK；ACC_S2_002 30000.00 OK
+  口令哈希     : OPS-ADMIN / UID-000001 / UID-000002 均为 $2a$12$ BCrypt
+  login_lookup_rows = 1
+  预期错误      : ERROR 1062 uk_transaction_request、
+                 ERROR 3819 chk_transaction_amount（-50.00 被 CHECK 拒绝，8.0.13 时代这条不会报）、
+                 ERROR 1062 uk_transaction_flow_role
+  记账校验      : 50000.00 -> 50100.00，increased_by = 100.00，flow_count = 1
+
+  说明：verify.sql 的第 3 处“预期错误”由 CHECK 产生，是升级后新增的预期行为；
+  deploy/scripts/verify-db.ps1 的 NOTE 已同步改为“3 个预期错误”。
+  verify.sql 开头会把 ACC_S2_001 复位为 50000.00，因此本节的 50088.00 已被复位。
+
+================================================================================
+第 18 节  合并 main@e7d3df3（S3 增量，21 表）后复验
+时间：2026-11-19  基线：yys4@26369be（merge main@e7d3df3）
+原始输出：docs/04-测试报告/s4/verify-output-20261119-193559.txt
+================================================================================
+
+【背景】PR #42 合并（8c4bb5f）后 main 又前进两次：PR #43（亓壬）、PR #44（S3 运营交易、
+  回单与风控审批）。schema.sql 新增 5 张表：
+    risk_alert_disposal / risk_change_request / risk_change_approval /
+    risk_list_entry / trade_manual_action
+  已 git merge origin/main（无冲突，merge commit 26369be），并按新 schema 重建数据库。
+
+【结构复验】
+  mysql_version = 8.0.46
+  charset       = utf8mb4
+  collation     = utf8mb4_0900_ai_ci（@@collation_server 服务端默认值，非库默认排序规则）
+  table_count   = 21   （16 -> 21，新增 5 张）
+  fk_count      = 16   （S3 新表未加外键，数量不变）
+  check_count   = 48   （40 -> 48）
+
+【业务数据复验】
+  风控规则：RK-01 ACCOUNT_STATUS（限额为 NULL，enabled=1）
+            RK-02 LIMIT_POLICY 50000.00 / 10000.00 / 50000.00，enabled=1
+  余额不变式：ACC_S2_001 50000.00 available=50000.00 -> OK
+              ACC_S2_002 30000.00 available=30000.00 -> OK
+  口令哈希：OPS-ADMIN / UID-000001 / UID-000002 均 $2a$12$ BCrypt
+  login_lookup_rows = 1
+
+【预期错误（3 处，均符合预期）】
+  line 41  ERROR 1062 uk_transaction_request      （幂等键重复）
+  line 49  ERROR 3819 chk_transaction_amount      （-50.00 被 CHECK 拒绝）
+  line 86  ERROR 1062 uk_transaction_flow_role    （流水角色唯一键重复）
+
+【记账校验】50000.00 -> 50100.00，increased_by = 100.00，
+  flow_count = 1（VERIFY-DEPO-0001 / DEPOSIT_IN / CREDIT / 100.00）
+
+结论：合并 S3 增量后 21 表 / 16 外键 / 48 CHECK 与建表脚本完全一致，
+  余额不变式、演示账户、风控规则、幂等键约束、CHECK 约束全部复核通过。
+  注：S3 新增的 5 张表在 init-data.sql 中无种子数据（当前为空表），
+  如需演示数据需 S3 补充，不影响结构验收。
+
+
+
+

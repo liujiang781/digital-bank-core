@@ -72,8 +72,13 @@ CREATE USER IF NOT EXISTS 'account_service'@'%'    IDENTIFIED BY '<随机口令>
 CREATE USER IF NOT EXISTS 'transaction_service'@'%' IDENTIFIED BY '<随机口令>';
 CREATE USER IF NOT EXISTS 'risk_service'@'%'       IDENTIFIED BY '<随机口令>';
 
-GRANT SELECT ON payment_db.customer   TO 'bank_user'@'%';
-GRANT SELECT ON payment_db.credential TO 'bank_user'@'%';
+GRANT SELECT, INSERT, UPDATE         ON payment_db.customer             TO 'bank_user'@'%';
+GRANT SELECT, INSERT, UPDATE         ON payment_db.credential           TO 'bank_user'@'%';
+GRANT SELECT, INSERT, UPDATE         ON payment_db.user_command         TO 'bank_user'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE ON payment_db.staff_authorization   TO 'bank_user'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE ON payment_db.staff_account_scope   TO 'bank_user'@'%';
+GRANT SELECT, INSERT                 ON payment_db.audit_log            TO 'bank_user'@'%';
+GRANT SELECT                         ON payment_db.account              TO 'bank_user'@'%';
 
 GRANT SELECT, INSERT, UPDATE ON payment_db.account             TO 'account_service'@'%';
 GRANT SELECT, INSERT         ON payment_db.account_status_log  TO 'account_service'@'%';

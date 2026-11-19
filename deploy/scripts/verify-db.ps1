@@ -46,7 +46,7 @@ Add-Content -Path $outFile -Value $block -Encoding UTF8
 $verifySql = Join-Path $PSScriptRoot '..\sql\verify.sql'
 if (Test-Path $verifySql) {
     Add-Content -Path $outFile -Value "`n=== verify.sql (-f) ===" -Encoding UTF8
-    Add-Content -Path $outFile -Value "NOTE: two Duplicate entry errors are EXPECTED (uk_transaction_request / uk_transaction_flow_role)." -Encoding UTF8
+    Add-Content -Path $outFile -Value "NOTE: 3 errors are EXPECTED: two Duplicate entry (uk_transaction_request / uk_transaction_flow_role) and one ERROR 3819 chk_transaction_amount (negative amount, proves CHECK is enforced on MySQL 8.0.16+)." -Encoding UTF8
     $block = Get-Content $verifySql -Raw | & $mysql -f -u root --default-character-set=utf8mb4 $Database 2>&1 | Out-String
     Add-Content -Path $outFile -Value $block -Encoding UTF8
 }
