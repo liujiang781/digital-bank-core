@@ -89,15 +89,17 @@ public class AccountService {
     }
 
     @Transactional(readOnly = true)
-    public Page<AccountView> list(Actor actor, int page, int pageSize) {
+    public Page<AccountView> list(Actor actor, int page, int pageSize, String reason) {
         pagination(page, pageSize);
+        boolean staff = isBackOffice(actor);
+        if (staff) reason = text(reason, "查询原因");
         List<Object> args = new ArrayList<>();
         String condition = null;
         if (actor.customerId() != null && !actor.customerId().isBlank()) {
             condition = "customer_id = ?";
             args.add(actor.customerId());
         }
-        if (isBackOffice(actor) && !actor.accountScope().isEmpty()) {
+        if (staff && !actor.accountScope().isEmpty()) {
             List<String> scope = actor.accountScope().stream().filter(id -> !"*".equals(id)).sorted().toList();
             if (!scope.isEmpty()) {
                 String scoped = "account_id IN (" + String.join(",", java.util.Collections.nCopies(scope.size(), "?")) + ")";
@@ -105,33 +107,53 @@ public class AccountService {
                 args.addAll(scope);
             }
         }
+        Page<AccountView> result;
         if (condition == null) {
-            return new Page<>(List.of(), 0, page, pageSize);
+            result = new Page<>(List.of(), 0, page, pageSize);
+        } else {
+            Long count = jdbc.queryForObject("SELECT COUNT(*) FROM account WHERE " + condition, Long.class, args.toArray());
+            List<Object> queryArgs = new ArrayList<>(args);
+            queryArgs.add(pageSize);
+            queryArgs.add((long) (page - 1) * pageSize);
+            List<AccountView> items = jdbc.query("SELECT * FROM account WHERE " + condition
+                            + " ORDER BY created_at DESC, account_id DESC LIMIT ? OFFSET ?", Account::fromRow, queryArgs.toArray())
+                    .stream().map(this::view).toList();
+            result = new Page<>(items, count == null ? 0 : count, page, pageSize);
         }
-        Long count = jdbc.queryForObject("SELECT COUNT(*) FROM account WHERE " + condition, Long.class, args.toArray());
-        List<Object> queryArgs = new ArrayList<>(args);
-        queryArgs.add(pageSize);
-        queryArgs.add((long) (page - 1) * pageSize);
-        List<AccountView> items = jdbc.query("SELECT * FROM account WHERE " + condition
-                        + " ORDER BY created_at DESC, account_id DESC LIMIT ? OFFSET ?", Account::fromRow, queryArgs.toArray())
-                .stream().map(this::view).toList();
-        return new Page<>(items, count == null ? 0 : count, page, pageSize);
+        if (staff) auditScope(actor, "ACCOUNT_LIST_QUERY", reason);
+        return result;
     }
 
     @Transactional(readOnly = true)
-    public AccountView get(Actor actor, String accountId) {
+    public AccountView get(Actor actor, String accountId, String reason) {
         Account account = load(accountId, false);
-        requireRead(actor, account);
-        return view(account);
+        boolean staff = isBackOffice(actor);
+        if (staff) {
+            access.requireOperator(actor, accountId, true);
+            reason = text(reason, "查询原因");
+        } else {
+            requireRead(actor, account);
+        }
+        AccountView result = view(account);
+        if (staff) audit(actor, "ACCOUNT_GET_QUERY", accountId, reason, null);
+        return result;
     }
 
     @Transactional(readOnly = true)
-    public BalanceView balance(Actor actor, String accountId) {
+    public BalanceView balance(Actor actor, String accountId, String reason) {
         Account account = load(accountId, false);
-        requireRead(actor, account);
-        return new BalanceView(account.accountId(), account.currency(), account.status(),
+        boolean staff = isBackOffice(actor);
+        if (staff) {
+            access.requireOperator(actor, accountId, true);
+            reason = text(reason, "查询原因");
+        } else {
+            requireRead(actor, account);
+        }
+        BalanceView result = new BalanceView(account.accountId(), account.currency(), account.status(),
                 Money.format(account.bookBalance()), Money.format(account.reservedAmount()),
                 Money.format(account.availableBalance()));
+        if (staff) audit(actor, "ACCOUNT_BALANCE_QUERY", accountId, reason, null);
+        return result;
     }
 
     @Transactional
@@ -242,13 +264,22 @@ public class AccountService {
 
     @Transactional(readOnly = true)
     public Page<OperationView> operations(Actor actor, String accountId, int page, int pageSize,
-            OffsetDateTime startTime, OffsetDateTime endTime) {
-        requireRead(actor, load(accountId, false));
+            OffsetDateTime startTime, OffsetDateTime endTime, String reason) {
+        Account account = load(accountId, false);
+        boolean staff = isBackOffice(actor);
+        if (staff) {
+            access.requireOperator(actor, accountId, true);
+            reason = text(reason, "查询原因");
+        } else {
+            requireRead(actor, account);
+        }
         List<Object> args = new ArrayList<>(List.of(accountId));
         String filter = timeFilter("target_type = 'account' AND target_ref = ?", args, startTime, endTime);
-        return queryPage("audit_log", filter, args, page, pageSize,
+        Page<OperationView> result = queryPage("audit_log", filter, args, page, pageSize,
                 (rs, n) -> new OperationView(rs.getLong("id"), rs.getString("action"), rs.getString("reason"),
                         rs.getString("result"), offset(rs.getObject("created_at", LocalDateTime.class))), "created_at DESC, id DESC");
+        if (staff) audit(actor, "ACCOUNT_OPERATIONS_QUERY", accountId, reason, null);
+        return result;
     }
 
     @Transactional
@@ -366,6 +397,11 @@ public class AccountService {
     private void audit(Actor actor, String action, String accountId, String reason, String tradeNo) {
         jdbc.update("INSERT INTO audit_log (operator_identity_id, `action`, target_type, target_ref, reason, result, trade_no) "
                 + "VALUES (?, ?, 'account', ?, ?, 'SUCCESS', ?)", actor.identityId(), action, accountId, bounded(reason), tradeNo);
+    }
+
+    private void auditScope(Actor actor, String action, String reason) {
+        jdbc.update("INSERT INTO audit_log (operator_identity_id, `action`, target_type, target_ref, reason, result) "
+                + "VALUES (?, ?, 'account_scope', NULL, ?, 'SUCCESS')", actor.identityId(), action, bounded(reason));
     }
 
     private <T> Page<T> queryPage(String table, String filter, List<Object> args, int page, int pageSize,

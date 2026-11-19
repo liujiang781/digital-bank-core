@@ -38,18 +38,21 @@ public class AccountController {
 
     @GetMapping
     public ApiResponse<Page<AccountView>> list(@RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int pageSize, HttpServletRequest request) {
-        return ok(accounts.list(access.requireActor(request), page, pageSize), request);
+            @RequestParam(defaultValue = "20") int pageSize,
+            @RequestParam(required = false) String reason, HttpServletRequest request) {
+        return ok(accounts.list(access.requireActor(request), page, pageSize, reason), request);
     }
 
     @GetMapping("/{accountId}")
-    public ApiResponse<AccountView> get(@PathVariable String accountId, HttpServletRequest request) {
-        return ok(accounts.get(access.requireActor(request), accountId), request);
+    public ApiResponse<AccountView> get(@PathVariable String accountId,
+            @RequestParam(required = false) String reason, HttpServletRequest request) {
+        return ok(accounts.get(access.requireActor(request), accountId, reason), request);
     }
 
     @GetMapping("/{accountId}/balance")
-    public ApiResponse<BalanceView> balance(@PathVariable String accountId, HttpServletRequest request) {
-        return ok(accounts.balance(access.requireActor(request), accountId), request);
+    public ApiResponse<BalanceView> balance(@PathVariable String accountId,
+            @RequestParam(required = false) String reason, HttpServletRequest request) {
+        return ok(accounts.balance(access.requireActor(request), accountId, reason), request);
     }
 
     @PostMapping("/{accountId}/freeze")
@@ -85,8 +88,8 @@ public class AccountController {
             @RequestParam(defaultValue = "1") int page, @RequestParam(defaultValue = "20") int pageSize,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime startTime,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime endTime,
-            HttpServletRequest request) {
-        return ok(accounts.operations(access.requireActor(request), accountId, page, pageSize, startTime, endTime), request);
+            @RequestParam(required = false) String reason, HttpServletRequest request) {
+        return ok(accounts.operations(access.requireActor(request), accountId, page, pageSize, startTime, endTime, reason), request);
     }
 
     @GetMapping("/{accountId}/fund-entries")

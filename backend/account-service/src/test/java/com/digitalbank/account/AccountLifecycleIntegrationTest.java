@@ -110,7 +110,7 @@ class AccountLifecycleIntegrationTest {
         }
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM account WHERE customer_id = ? AND status <> 'CLOSED'",
                 Long.class, CUSTOMER.customerId())).isEqualTo(3);
-        assertThat(accounts.get(CUSTOMER, first.accountId()).status()).isEqualTo("FROZEN");
+        assertThat(accounts.get(CUSTOMER, first.accountId(), null).status()).isEqualTo("FROZEN");
     }
 
     @Test
@@ -147,26 +147,26 @@ class AccountLifecycleIntegrationTest {
 
         assertThat(first.restrictions()).hasSize(1);
         assertThat(second.restrictions()).hasSize(2);
-        assertThat(accounts.get(CUSTOMER, accountId).restrictions()).containsExactlyElementsOf(second.restrictions());
+        assertThat(accounts.get(CUSTOMER, accountId, null).restrictions()).containsExactlyElementsOf(second.restrictions());
         assertError(() -> accounts.unfreeze(risk, accountId,
                 new UnfreezeRequest("风险解除", "风险复核通过", all, null), requestId()), ErrorCode.FORBIDDEN);
         assertError(() -> accounts.unfreeze(ops, accountId,
                 new UnfreezeRequest("仅解除一项", "运营核查完成", List.of(all.getFirst()), null), requestId()),
                 ErrorCode.ACCOUNT_STATUS_INVALID);
-        assertThat(accounts.get(CUSTOMER, accountId).status()).isEqualTo("FROZEN");
+        assertThat(accounts.get(CUSTOMER, accountId, null).status()).isEqualTo("FROZEN");
 
         String unfreezeRequest = requestId();
         var body = new UnfreezeRequest("全部限制均解除", "运营和风控分别核对通过", all, null);
         assertError(() -> accounts.unfreeze(ops, accountId, body, unfreezeRequest), ErrorCode.ACCOUNT_STATUS_INVALID);
-        assertThat(accounts.get(CUSTOMER, accountId).status()).isEqualTo("FROZEN");
+        assertThat(accounts.get(CUSTOMER, accountId, null).status()).isEqualTo("FROZEN");
         jdbc.update("INSERT INTO risk_freeze_release (restriction_id, approved_by, basis) VALUES (?, ?, ?)",
                 all.getLast(), risk.identityId(), "风控复核完成");
-        assertThat(accounts.get(ops, accountId).restrictions().getLast().releaseApproved()).isTrue();
+        assertThat(accounts.get(ops, accountId, "运营核查").restrictions().getLast().releaseApproved()).isTrue();
         assertThat(accounts.unfreeze(ops, accountId, body, unfreezeRequest).status()).isEqualTo("ACTIVE");
         assertThat(accounts.unfreeze(ops, accountId, body, unfreezeRequest).status()).isEqualTo("ACTIVE");
         assertThat(accounts.freeze(ops, accountId, new FreezeRequest("运营核查", null), firstRequest)).isEqualTo(first);
-        assertThat(accounts.get(CUSTOMER, accountId).status()).isEqualTo("ACTIVE");
-        assertThat(accounts.get(CUSTOMER, accountId).restrictions()).isEmpty();
+        assertThat(accounts.get(CUSTOMER, accountId, null).status()).isEqualTo("ACTIVE");
+        assertThat(accounts.get(CUSTOMER, accountId, null).restrictions()).isEmpty();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM account_status_log WHERE new_status = 'FROZEN'", Long.class))
                 .isEqualTo(2);
         assertError(() -> accounts.freeze(ops, accountId, new FreezeRequest("不同内容", null), firstRequest),
@@ -183,8 +183,8 @@ class AccountLifecycleIntegrationTest {
         accounts.freeze(allowed, accountId, request, requestId);
         Actor revoked = new Actor("operations-1", null, Set.of("OPERATIONS"), Set.of());
         assertError(() -> accounts.freeze(revoked, accountId, request, requestId), ErrorCode.FORBIDDEN);
-        assertError(() -> accounts.get(OTHER, accountId), ErrorCode.ACCOUNT_NOT_FOUND);
-        assertError(() -> accounts.balance(OTHER, accountId), ErrorCode.ACCOUNT_NOT_FOUND);
+        assertError(() -> accounts.get(OTHER, accountId, null), ErrorCode.ACCOUNT_NOT_FOUND);
+        assertError(() -> accounts.balance(OTHER, accountId, null), ErrorCode.ACCOUNT_NOT_FOUND);
         assertError(() -> accounts.fundEntries(OTHER, accountId, 1, 20, null, null, null, null),
                 ErrorCode.ACCOUNT_NOT_FOUND);
         assertError(() -> accounts.freeze(CUSTOMER, accountId, request, requestId()), ErrorCode.FORBIDDEN);
@@ -198,7 +198,7 @@ class AccountLifecycleIntegrationTest {
         String requestId = requestId();
 
         assertError(() -> accounts.close(CUSTOMER, accountId, requestId), ErrorCode.ACCOUNT_NOT_CLOSABLE);
-        assertThat(accounts.get(CUSTOMER, accountId).status()).isEqualTo("ACTIVE");
+        assertThat(accounts.get(CUSTOMER, accountId, null).status()).isEqualTo("ACTIVE");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM account_command WHERE command_type = 'ACCOUNT_CLOSE'", Long.class))
                 .isZero();
         jdbc.update("UPDATE `transaction` SET status = 'REJECTED' WHERE trade_no = ?", tradeNo);
@@ -213,7 +213,7 @@ class AccountLifecycleIntegrationTest {
         jdbc.update("INSERT INTO transfer_order (transfer_id, trade_no, transfer_type, payer_account_id, payee_account_id, amount, currency) "
                         + "VALUES (?, ?, 'INTERNAL', ?, ?, 1.00, 'CNY')", id(), tradeNo, payer, payee);
         assertError(() -> accounts.close(CUSTOMER, payee, requestId()), ErrorCode.ACCOUNT_NOT_CLOSABLE);
-        assertThat(accounts.get(CUSTOMER, payee).status()).isEqualTo("ACTIVE");
+        assertThat(accounts.get(CUSTOMER, payee, null).status()).isEqualTo("ACTIVE");
     }
 
     @Test
@@ -223,8 +223,8 @@ class AccountLifecycleIntegrationTest {
         open(CUSTOMER);
         assertThat(accounts.close(CUSTOMER, first, requestId()).status()).isEqualTo("CLOSED");
         assertThat(open(CUSTOMER).status()).isEqualTo("ACTIVE");
-        assertThat(accounts.get(CUSTOMER, first).status()).isEqualTo("CLOSED");
-        assertThat(accounts.operations(CUSTOMER, first, 1, 20, null, null).items())
+        assertThat(accounts.get(CUSTOMER, first, null).status()).isEqualTo("CLOSED");
+        assertThat(accounts.operations(CUSTOMER, first, 1, 20, null, null, null).items())
                 .extracting(OperationView::action).contains("ACCOUNT_OPEN", "ACCOUNT_CLOSE");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM account WHERE status <> 'CLOSED'", Long.class)).isEqualTo(3);
     }
@@ -240,8 +240,8 @@ class AccountLifecycleIntegrationTest {
                 new LimitsRequest("250.00", "1500.00", null), requestId()), ErrorCode.INVALID_ARGUMENT);
         assertError(() -> accounts.limits(CUSTOMER, accountId,
                 new LimitsRequest("200.00", "100.00", null), requestId()), ErrorCode.INVALID_ARGUMENT);
-        assertThat(accounts.get(CUSTOMER, accountId).personalSingleLimit()).isEqualTo("150.00");
-        assertThat(accounts.get(CUSTOMER, accountId).personalDailyLimit()).isEqualTo("1500.00");
+        assertThat(accounts.get(CUSTOMER, accountId, null).personalSingleLimit()).isEqualTo("150.00");
+        assertThat(accounts.get(CUSTOMER, accountId, null).personalDailyLimit()).isEqualTo("1500.00");
     }
 
     @Test
@@ -260,7 +260,7 @@ class AccountLifecycleIntegrationTest {
         assertThatThrownBy(() -> accounts.limits(CUSTOMER, accountId,
                 new LimitsRequest("1000.00", "9999.99", null), requestId()))
                 .isInstanceOf(BizException.class).hasMessageContaining("10000.00");
-        assertThat(accounts.get(CUSTOMER, accountId).personalDailyLimit()).isNull();
+        assertThat(accounts.get(CUSTOMER, accountId, null).personalDailyLimit()).isNull();
         assertThat(accounts.limits(CUSTOMER, accountId, new LimitsRequest("1000.00", "10000.00", null), requestId())
                 .personalDailyLimit()).isEqualTo("10000.00");
 
@@ -298,17 +298,52 @@ class AccountLifecycleIntegrationTest {
         String own = open(CUSTOMER).accountId();
         String other = open(OTHER).accountId();
         jdbc.update("UPDATE account SET book_balance = 100.00, reserved_amount = 35.25 WHERE account_id = ?", own);
-        BalanceView balance = accounts.balance(CUSTOMER, own);
+        BalanceView balance = accounts.balance(CUSTOMER, own, null);
         assertThat(balance.bookBalance()).isEqualTo("100.00");
         assertThat(balance.reservedAmount()).isEqualTo("35.25");
         assertThat(balance.availableBalance()).isEqualTo("64.75");
-        assertThat(accounts.list(CUSTOMER, 1, 20).items()).extracting(AccountView::accountId).containsExactly(own);
+        assertThat(accounts.list(CUSTOMER, 1, 20, null).items()).extracting(AccountView::accountId).containsExactly(own);
         Actor scoped = staff("operations-1", "OPERATIONS", other);
-        assertThat(accounts.list(scoped, 1, 20).items()).extracting(AccountView::accountId).containsExactly(other);
+        assertThat(accounts.list(scoped, 1, 20, "运营核查").items()).extracting(AccountView::accountId).containsExactly(other);
         Actor wildcard = staff("operations-2", "OPERATIONS", "*");
-        assertThat(accounts.list(wildcard, 1, 20).items()).isEmpty();
-        assertError(() -> accounts.list(CUSTOMER, 0, 20), ErrorCode.INVALID_ARGUMENT);
-        assertError(() -> accounts.list(CUSTOMER, 1, 101), ErrorCode.INVALID_ARGUMENT);
+        assertThat(accounts.list(wildcard, 1, 20, "运营核查").items()).isEmpty();
+        assertError(() -> accounts.list(CUSTOMER, 0, 20, null), ErrorCode.INVALID_ARGUMENT);
+        assertError(() -> accounts.list(CUSTOMER, 1, 101, null), ErrorCode.INVALID_ARGUMENT);
+    }
+
+    @Test
+    void backOfficeQueriesRequireReasonAndAreAudited() {
+        String accountId = open(CUSTOMER).accountId();
+        Actor ops = staff("operations-1", "OPERATIONS", accountId);
+        Actor outside = staff("operations-2", "OPERATIONS", "another-account");
+
+        assertError(() -> accounts.get(ops, accountId, null), ErrorCode.INVALID_ARGUMENT);
+        assertError(() -> accounts.get(ops, accountId, " "), ErrorCode.INVALID_ARGUMENT);
+        assertError(() -> accounts.balance(ops, accountId, null), ErrorCode.INVALID_ARGUMENT);
+        assertError(() -> accounts.operations(ops, accountId, 1, 20, null, null, null), ErrorCode.INVALID_ARGUMENT);
+        assertError(() -> accounts.list(ops, 1, 20, null), ErrorCode.INVALID_ARGUMENT);
+
+        assertError(() -> accounts.get(outside, accountId, "核查"), ErrorCode.FORBIDDEN);
+        assertError(() -> accounts.balance(outside, accountId, "核查"), ErrorCode.FORBIDDEN);
+
+        assertThat(accounts.get(ops, accountId, " 核对账户 ").status()).isEqualTo("ACTIVE");
+        assertThat(accounts.balance(ops, accountId, " 核对余额 ").bookBalance()).isEqualTo("0.00");
+        assertThat(accounts.operations(ops, accountId, 1, 20, null, null, " 核对操作 ").items()).isNotEmpty();
+        assertThat(accounts.list(ops, 1, 20, " 核对清单 ").items()).extracting(AccountView::accountId)
+                .containsExactly(accountId);
+
+        assertThat(jdbc.queryForList("SELECT action FROM audit_log WHERE operator_identity_id = ? "
+                + "AND action IN ('ACCOUNT_GET_QUERY','ACCOUNT_BALANCE_QUERY','ACCOUNT_OPERATIONS_QUERY','ACCOUNT_LIST_QUERY') "
+                + "ORDER BY id", String.class, ops.identityId()))
+                .containsExactly("ACCOUNT_GET_QUERY", "ACCOUNT_BALANCE_QUERY", "ACCOUNT_OPERATIONS_QUERY",
+                        "ACCOUNT_LIST_QUERY");
+        assertThat(jdbc.queryForList("SELECT reason FROM audit_log WHERE action = 'ACCOUNT_GET_QUERY' "
+                + "AND operator_identity_id = ?", String.class, ops.identityId())).containsExactly("核对账户");
+
+        assertThat(accounts.get(CUSTOMER, accountId, null).status()).isEqualTo("ACTIVE");
+        assertThat(jdbc.queryForList("SELECT action FROM audit_log WHERE operator_identity_id = ? AND action IN "
+                + "('ACCOUNT_GET_QUERY','ACCOUNT_BALANCE_QUERY','ACCOUNT_OPERATIONS_QUERY','ACCOUNT_LIST_QUERY')",
+                String.class, CUSTOMER.identityId())).isEmpty();
     }
 
     @Test
@@ -318,7 +353,7 @@ class AccountLifecycleIntegrationTest {
         Actor ops = staff("operations-1", "OPERATIONS", accountId);
         assertThatThrownBy(() -> accounts.freeze(ops, accountId, new FreezeRequest("运营核查", null), requestId()))
                 .isInstanceOf(DataAccessException.class);
-        assertThat(accounts.get(CUSTOMER, accountId).status()).isEqualTo("ACTIVE");
+        assertThat(accounts.get(CUSTOMER, accountId, null).status()).isEqualTo("ACTIVE");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM account_status_log WHERE new_status = 'FROZEN'", Long.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM account_command WHERE command_type = 'ACCOUNT_FREEZE'", Long.class)).isZero();
     }
@@ -338,7 +373,7 @@ class AccountLifecycleIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.code").value("SUCCEEDED"))
                 .andExpect(jsonPath("$.traceId").value("lifecycle-contract"))
                 .andExpect(jsonPath("$.data.bookBalance").value("0.00"));
-        String accountId = accounts.list(CUSTOMER, 1, 20).items().getFirst().accountId();
+        String accountId = accounts.list(CUSTOMER, 1, 20, null).items().getFirst().accountId();
 
         mvc.perform(post("/api/v1/accounts/{id}/limits", accountId)
                         .header("Authorization", SessionVerifierTestConfiguration.LIFECYCLE_AUTHORIZATION)
