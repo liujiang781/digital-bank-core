@@ -1,0 +1,370 @@
+实验四 S4 验证输出（原始记录）
+执行时间：2026-11-17（初轮，基线 main@fb2719e）/ 2026-11-19（整体复跑，基线 main@abc6c62，见第 13 节）
+执行人：S4
+环境：Windows 11 / OpenJDK 21.0.2 / Python 3.12.10 / MySQL 8.0.13 / 本机未安装 Docker 与 Node
+
+======================================================================
+1. 环境版本
+======================================================================
+mysql  Ver 8.0.13 for Win64 on x86_64
+java   openjdk version "21.0.2" 2024-01-16
+python Python 3.12.10
+docker 未安装
+node   未安装
+
+======================================================================
+2. 四个服务账号的实际授权（SHOW GRANTS FOR CURRENT_USER()）
+======================================================================
+===== bank_user =====
+GRANT USAGE ON *.* TO `bank_user`@`%`
+GRANT SELECT ON `payment_db`.`credential` TO `bank_user`@`%`
+GRANT SELECT ON `payment_db`.`customer` TO `bank_user`@`%`
+
+===== account_service =====
+GRANT USAGE ON *.* TO `account_service`@`%`
+GRANT LOCK TABLES ON `payment_db`.* TO `account_service`@`%`
+GRANT SELECT, INSERT, UPDATE ON `payment_db`.`account_command` TO `account_service`@`%`
+GRANT SELECT, INSERT, UPDATE ON `payment_db`.`account_reservation` TO `account_service`@`%`
+GRANT SELECT, INSERT ON `payment_db`.`account_status_log` TO `account_service`@`%`
+GRANT SELECT, INSERT, UPDATE ON `payment_db`.`account` TO `account_service`@`%`
+GRANT SELECT, INSERT ON `payment_db`.`audit_log` TO `account_service`@`%`
+GRANT SELECT ON `payment_db`.`customer` TO `account_service`@`%`
+GRANT SELECT ON `payment_db`.`risk_event` TO `account_service`@`%`
+GRANT SELECT ON `payment_db`.`risk_rule` TO `account_service`@`%`
+GRANT SELECT, INSERT, UPDATE ON `payment_db`.`transaction_flow` TO `account_service`@`%`
+GRANT SELECT, INSERT, UPDATE ON `payment_db`.`transaction` TO `account_service`@`%`
+GRANT SELECT ON `payment_db`.`transfer_order` TO `account_service`@`%`
+
+===== transaction_service =====
+GRANT USAGE ON *.* TO `transaction_service`@`%`
+GRANT SELECT ON `payment_db`.`account_reservation` TO `transaction_service`@`%`
+GRANT SELECT ON `payment_db`.`account` TO `transaction_service`@`%`
+GRANT SELECT, INSERT, UPDATE ON `payment_db`.`mock_channel_deposit` TO `transaction_service`@`%`
+GRANT SELECT, INSERT, UPDATE ON `payment_db`.`transaction` TO `transaction_service`@`%`
+
+===== risk_service =====
+GRANT USAGE ON *.* TO `risk_service`@`%`
+GRANT SELECT ON `payment_db`.`account` TO `risk_service`@`%`
+GRANT SELECT, INSERT ON `payment_db`.`risk_event` TO `risk_service`@`%`
+GRANT SELECT, INSERT, UPDATE ON `payment_db`.`risk_rule` TO `risk_service`@`%`
+GRANT SELECT ON `payment_db`.`transaction` TO `risk_service`@`%`
+
+结论：四个服务账号均为最小权限，无 DROP / DELETE / 全库授权。
+
+======================================================================
+3. 风控规则（S3 限额口径核对）
+======================================================================
+rule_id  rule_type        deposit_single_limit  outgoing_single_limit  outgoing_daily_limit  enabled
+RK-01    ACCOUNT_STATUS   NULL                  NULL                   NULL                  1
+RK-02    LIMIT_POLICY     50000.00              10000.00               50000.00              1
+
+与 S3 测试口径（存款单笔 50000 / 出账单笔 10000 / 出账日累计 50000）一致。
+
+======================================================================
+4. 演示账户余额
+======================================================================
+account_id   book_balance  reserved_amount  available
+ACC_S2_001   50000.00      0.00             50000.00
+ACC_S2_002   30000.00      0.00             30000.00
+
+======================================================================
+5. 备份与恢复演练（s2_exp4_test 库，真实执行）
+======================================================================
+--- 1. 建演练表并写入 3 行 ---
+rows_before
+3
+
+--- 2. mysqldump 备份 ---
+dump size = 1656 bytes
+
+--- 3. 删除表模拟故障 ---
+table_exists
+0
+
+--- 4. 从备份恢复 ---
+（无报错）
+
+--- 5. 恢复后核对 ---
+rows_after
+3
+id	note
+1	alpha
+2	beta
+3	gamma
+
+结论：备份文件可完整恢复，行数与内容一致。
+
+======================================================================
+6. 表数 / 外键数 / CHECK 数
+======================================================================
+注意：`information_schema` 会按当前账号权限过滤。
+用 account_service 查询时只返回其已授权的 11 张表（table_count = 11），
+这不是库中真实表数，必须用 root 或对全库有 SELECT 的账号查询。
+
+历史 root 执行结果（见 sql/verify.sql）：
+  table_count = 13
+  fk_count    = 15
+  CHECK 约束  = 0（本机 MySQL 8.0.13 低于 8.0.16，CHECK 不强制，见 DEF-S4-001）
+
+如需重新生成 root 级证据，执行：
+  powershell -ExecutionPolicy Bypass -File deploy/scripts/verify-db.ps1
+
+======================================================================
+7. 约束与"存款只入账一次"证据（root 执行 verify.sql 的历史输出）
+======================================================================
+account_id	book_balance	reserved_amount	available_balance	check_result
+ACC_S2_001	50000.00	0.00	50000.00	OK
+ACC_S2_002	30000.00	0.00	30000.00	OK
+
+table_count
+13
+
+fk_count
+15
+
+identity_id	username	hash_prefix	hash_algo
+OPS-ADMIN	admin	$2a$12$	BCrypt
+UID-000001	zhangsan	$2a$12$	BCrypt
+UID-000002	lisi	$2a$12$	BCrypt
+
+login_lookup_rows
+1
+
+ERROR 1062 (23000) at line 42: Duplicate entry 'UID-000001-DEPOSIT-REQ-DEMO-0001' for key 'uk_transaction_request'
+
+account_id	balance_before
+ACC_S2_001	50000.00
+
+account_id	balance_after	increased_by
+ACC_S2_001	50100.00	100.00
+
+trade_no	entry_role	direction	amount
+VERIFY-DEPO-0001	DEPOSIT_IN	CREDIT	100.00
+
+flow_count
+1
+
+ERROR 1062 (23000) at line 91: Duplicate entry 'VERIFY-DEPO-0001-ACC_S2_001-DEPOSIT_IN' for key 'uk_transaction_flow_role'
+
+======================================================================
+8. DEP-S4-012 / DEP-S4-013 补充执行（2026-11-17）
+======================================================================
+DEP-S4-012 五服务健康检查：已执行。
+  构建 main@fb2719e：mvnw.cmd clean install，6 模块 BUILD SUCCESS（11m36s）。
+  启动：业务 8081/8082/8083/8084，网关 18080（本机 8080 被 NI Application Web Server 占用）。
+  端口连通：TcpTestSucceeded=True × 5。
+  网关 /actuator/health 返回 {"status":"UP"}。
+
+DEP-S4-013 存款冒烟（经网关闭环）：已执行。
+  POST /api/v1/deposits -> SUCCEEDED，trade_no TRD20261117BF16C2C5，金额 88.00。
+  ACC_S2_001 book_balance 50000.00 -> 50088.00；transaction_flow 新增 1 条（DEPOSIT_IN）。
+  冒烟后执行 deploy/sql/restore-demo.sql 清理：残留计数均为 0，
+  余额复位 ACC_S2_001=50000.00 / ACC_S2_002=30000.00。
+
+======================================================================
+9. health-check.ps1 实跑输出（2026-11-17）
+======================================================================
+[PASS] gateway          200 {"status":"UP"}
+[PASS] user-service     200 {"code":"SUCCEEDED","message":"请求成功","data":{"service":"user-service","status":"UP"},...}
+[PASS] account-service  200 {"code":"SUCCEEDED","message":"请求成功","data":{"status":"UP","service":"account-service"},...}
+[PASS] transaction-svc  200 {"code":"SUCCEEDED","message":"请求成功","data":{"status":"UP","service":"transaction-service"},...}
+[PASS] risk-service     200 {"code":"SUCCEEDED","message":"请求成功","data":{"status":"UP","service":"risk-service"},...}
+
+All targets UP (health only, not business acceptance).
+说明：脚本已修正 Windows PowerShell 5.1 下 .Content 被解析为 byte[] / Latin-1
+      导致的输出问题，统一按 UTF-8 解码。
+
+======================================================================
+10. backup-restore.ps1 -Mode drill 实跑输出（2026-11-17 20:48，交互输入 root 口令）
+======================================================================
+命令：powershell -ExecutionPolicy Bypass -File 'D:\1-软件工程实验\S4实验四\deploy\scripts\backup-restore.ps1' -Mode drill
+
+MySQL root password: ********
+
+=== 1. create drill db and 3 rows ===
+rows_before
+3
+
+=== 2. mysqldump ===
+[BACKUP] s4_backup_drill -> D:\1-软件工程实验\S4实验四\deploy\backups\s4_backup_drill-20261117-2048.sql (2005 bytes)
+
+=== 3. drop table (simulate failure) ===
+table_exists
+0
+
+=== 4. restore from backup ===
+[RESTORE] D:\1-软件工程实验\S4实验四\deploy\backups\s4_backup_drill-20261117-2048.sql -> s4_backup_drill
+
+=== 5. verify ===
+rows_after
+3
+
+id	note
+1	alpha
+2	beta
+3	gamma
+
+[DRILL] done, drill db removed
+
+结论：演练库 s4_backup_drill 建表写 3 行 → mysqldump 备份 2005 字节 →
+      DROP TABLE 后 table_exists=0 → 从备份恢复 → rows_after=3 且内容
+      alpha/beta/gamma 与备份前一致 → 演练库已清理。备份可完整恢复。
+
+======================================================================
+11. start-all.ps1 实跑输出（2026-11-17，五个服务一键拉起）
+======================================================================
+命令：powershell -ExecutionPolicy Bypass -File deploy/scripts/start-all.ps1 `
+        -BackendDir <backend> -EnvFile <本机 .env.local>
+
+Loaded env: D:\1-软件工程实验\S4\S4-数据库与环境\.env.local
+Started user-service on port 8081
+Started account-service on port 8082
+Started transaction-service on port 8083
+Started risk-service on port 8084
+Started gateway on port 18080
+[UP]   user-service
+[UP]   account-service
+[UP]   transaction-service
+[UP]   risk-service
+[UP]   gateway
+All services UP. Health only, not business acceptance.
+（脚本退出码 0）
+
+紧接着在同一会话执行 health-check.ps1（经网关 18080 反代）：
+
+[PASS] gateway          200 {"status":"UP"}
+[PASS] user-service     200 {"code":"SUCCEEDED","message":"请求成功","data":{"service":"user-service","status":"UP"},...}
+[PASS] account-service  200 {"code":"SUCCEEDED","message":"请求成功","data":{"service":"account-service","status":"UP"},...}
+[PASS] transaction-svc  200 {"code":"SUCCEEDED","message":"请求成功","data":{"service":"transaction-service","status":"UP"},...}
+[PASS] risk-service     200 {"code":"SUCCEEDED","message":"请求成功","data":{"status":"UP","service":"risk-service"},...}
+
+All targets UP (health only, not business acceptance).
+（退出码 0）
+
+说明：start-all.ps1 用 Start-Process cmd.exe 拉 5 个独立控制台。在自动化会话里，
+      会话结束时其子进程会被进程树回收，所以 start-all 与 health-check 必须放在
+      同一会话连续执行；用户在普通 PowerShell 窗口中执行时窗口会保留。
+
+======================================================================
+12. 演示口令实登验证（2026-11-17，S2/S3 口径）
+======================================================================
+前置：已按 S2/S3 口径把 OPS-ADMIN 的 BCrypt 哈希改为 admin123，
+      UID-000001 / UID-000002 保持 demo123（init-data.sql 内置同样的哈希）。
+
+请求：POST http://localhost:18080/api/v1/auth/login
+
+LOGIN OPS-ADMIN  -> code=SUCCEEDED token=32XkETGAPu...
+LOGIN UID-000001 -> code=SUCCEEDED token=dRK5R6Sqz7...
+
+结论：运营账号 admin123、个人账号 demo123 均可经网关登录成功；
+      三个演示账号的口令与 S2/S3 文档一致。
+
+======================================================================
+13. main@abc6c62 基线整体复跑（2026-11-19）
+======================================================================
+背景：分工表代码基线为 main@abc6c62（合并 PR #27，认证过滤器与公共组件依赖有改动），
+      本轮在该基线上把 13 条用例整体重跑一遍，替换初轮的 main@fb2719e 证据。
+环境：Windows 11 / OpenJDK 21.0.2 / MySQL 8.0.13 / 五服务 8081-8084 + 网关 18080。
+
+13.1 构建
+  git 工作副本切到 abc6c62；.\mvnw.cmd -DskipTests clean install -> 6 模块 BUILD SUCCESS。
+
+13.2 DEP-S4-012 五服务健康检查
+  start-all.ps1： [UP] user-service / account-service / transaction-service / risk-service / gateway，
+                  五项全绿，退出码 0。
+  health-check.ps1：5/5 [PASS]，网关 {"status":"UP"}，四个业务服务返回"请求成功"，退出码 0。
+  （PR #27 的认证过滤器改动未影响健康检查链路。）
+
+13.3 DEP-S4-013 存款冒烟（经网关闭环）
+  POST http://localhost:18080/api/v1/auth/login  {"identityId":"UID-000001","password":"demo123"}
+    -> 200 code=SUCCEEDED
+  POST http://localhost:18080/api/v1/deposits
+    body {"accountId":"ACC_S2_001","amount":"88.00","currency":"CNY","purpose":"abc6c62-smoke","requestId":"<UUID>"}
+    header X-Request-Id: 同值 UUID
+    -> 200 SUCCEEDED  trade_no=TRD20261119BC654A40
+  查库：transaction  DEPOSIT / 88.00 / SUCCESS
+        transaction_flow  DEPOSIT_IN / CREDIT / 88.00 / book_balance_after=50088.00
+        account  ACC_S2_001  book_balance 50000.00 -> 50088.00
+  清理：执行 restore-demo.sql
+        remaining_transactions=0  remaining_flows=0  remaining_channel_rows=0
+        ACC_S2_001 50000.00 / ACC_S2_002 30000.00  均 ACTIVE
+
+13.4 DEP-S4-001/002/003/005/006/007/008/010（verify-db.ps1，输出存档 verify-output-20261119-163728.txt）
+  mysql_version  charset  collation
+  8.0.13         utf8mb4  utf8mb4_0900_ai_ci
+  table_count = 13
+  fk_count    = 15
+  check_count = 0            <- DEF-S4-001，MySQL 8.0.13 低于 8.0.16，CHECK 不强制
+  rule_id  rule_type       deposit_single_limit  outgoing_single_limit  outgoing_daily_limit  enabled
+  RK-02    LIMIT_POLICY    50000.00              10000.00               50000.00              1
+  account_id   book_balance  reserved_amount  available  check_result
+  ACC_S2_001   50000.00      0.00             50000.00   OK
+  ACC_S2_002   30000.00      0.00             30000.00   OK
+  identity_id  username  hash_prefix  hash_algo
+  OPS-ADMIN    admin     $2a$12$      BCrypt
+  UID-000001   zhangsan  $2a$12$      BCrypt
+  UID-000002   lisi      $2a$12$      BCrypt
+  login_lookup_rows = 1
+  ERROR 1062 Duplicate entry 'UID-000001-DEPOSIT-REQ-DEMO-0001' for key 'uk_transaction_request'   <- 预期
+  balance_before 50000.00 -> balance_after 50100.00  increased_by 100.00  flow_count 1
+  ERROR 1062 Duplicate entry 'VERIFY-DEPO-0001-ACC_S2_001-DEPOSIT_IN' for key 'uk_transaction_flow_role'  <- 预期
+
+13.5 DEP-S4-004 演示数据幂等
+  再次执行 init-data.sql -> 无报错，余额仍为 50000.00 / 30000.00。
+
+13.6 DEP-S4-009 服务账号最小权限（SHOW GRANTS FOR CURRENT_USER()）
+  注意：服务账号按 'user'@'%' 建，本地用 mysql 客户端自查必须加 -h 127.0.0.1 --protocol=TCP，
+        否则客户端走 localhost 管道，匹配不到 '%' 账号，会误报 ERROR 1045。
+
+  === account_service ===
+  GRANT USAGE ON *.* TO `account_service`@`%`
+  GRANT LOCK TABLES ON `payment_db`.* TO `account_service`@`%`
+  GRANT SELECT, INSERT, UPDATE ON `payment_db`.`account_command` TO `account_service`@`%`
+  GRANT SELECT, INSERT, UPDATE ON `payment_db`.`account_reservation` TO `account_service`@`%`
+  GRANT SELECT, INSERT, UPDATE ON `payment_db`.`account_status_log` TO `account_service`@`%`
+  GRANT SELECT, INSERT, UPDATE ON `payment_db`.`account` TO `account_service`@`%`
+  GRANT SELECT, INSERT ON `payment_db`.`audit_log` TO `account_service`@`%`
+  GRANT SELECT ON `payment_db`.`customer` TO `account_service`@`%`
+  GRANT SELECT ON `payment_db`.`risk_event` TO `account_service`@`%`
+  GRANT SELECT ON `payment_db`.`risk_rule` TO `account_service`@`%`
+  GRANT SELECT, INSERT, UPDATE ON `payment_db`.`transaction_flow` TO `account_service`@`%`
+  GRANT SELECT, INSERT, UPDATE ON `payment_db`.`transaction` TO `account_service`@`%`
+  GRANT SELECT ON `payment_db`.`transfer_order` TO `account_service`@`%`
+
+  === transaction_service ===
+  GRANT USAGE ON *.* TO `transaction_service`@`%`
+  GRANT SELECT ON `payment_db`.`account_reservation` TO `transaction_service`@`%`
+  GRANT SELECT ON `payment_db`.`account` TO `transaction_service`@`%`
+  GRANT SELECT, INSERT, UPDATE ON `payment_db`.`mock_channel_deposit` TO `transaction_service`@`%`
+  GRANT SELECT, INSERT, UPDATE ON `payment_db`.`transaction` TO `transaction_service`@`%`
+
+  === risk_service ===
+  GRANT USAGE ON *.* TO `risk_service`@`%`
+  GRANT SELECT ON `payment_db`.`account` TO `risk_service`@`%`
+  GRANT SELECT, INSERT ON `payment_db`.`risk_event` TO `risk_service`@`%`
+  GRANT SELECT, INSERT, UPDATE ON `payment_db`.`risk_rule` TO `risk_service`@`%`
+  GRANT SELECT ON `payment_db`.`transaction` TO `risk_service`@`%`
+
+  结论：三个账号均为 USAGE + 库级精确表授权，无 ALL PRIVILEGES、无 GRANT OPTION、无全局写权限；
+        account_service 是唯一能写 account 的账号，transaction_service 与 risk_service 对 account 只读。
+
+13.7 DEP-S4-011 备份恢复演练（backup-restore.ps1 -Mode drill，用户交互输入 root 口令）
+  === 1. create drill db and 3 rows ===
+  rows_before = 3
+  === 2. mysqldump ===
+  [BACKUP] s4_backup_drill -> D:\1-软件工程实验\S4实验四\deploy\backups\s4_backup_drill-20261119-1647.sql (2005 bytes)
+  === 3. drop table (simulate failure) ===
+  table_exists = 0
+  === 4. restore from backup ===
+  [RESTORE] ...s4_backup_drill-20261119-1647.sql -> s4_backup_drill
+  === 5. verify ===
+  rows_after = 3
+  id  note
+  1   alpha
+  2   beta
+  3   gamma
+  [DRILL] done, drill db removed
+
+复跑结论：13 条用例在 main@abc6c62 上全部通过，与初轮 main@fb2719e 结果一致；
+          13/13 通过，0 失败，0 未执行，通过率与执行率均为 100%。
+

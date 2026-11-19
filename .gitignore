@@ -91,3 +91,6 @@ redis-data/
 
 # ---- UML 导出（保留源文件，可选忽略大量图片）----
 # docs/uml/out/*.png
+
+# ---- S4 备份产物 ----
+deploy/backups/
