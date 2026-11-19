@@ -37,6 +37,11 @@ public final class TransactionDtos {
 
     public record TradePage(long total, int page, int pageSize, List<TradeSummary> items) { }
 
+    /** 模拟回单（UC-TR-07）：仅成功交易生成，回单号由交易号确定性派生，重复下载内容一致。 */
+    public record ReceiptView(String receiptNo, String tradeNo, String businessType, String status,
+            String amount, String currency, String accountId, String channelEvidenceId,
+            String completedAt, String issuedAt, String notice) { }
+
     // ---- 与 S2 交接文档同形的内部契约 DTO ----
 
     public record Command(String tradeNo, String payerAccountId, String payeeAccountId,
@@ -79,4 +84,13 @@ public final class TransactionDtos {
     public record ChannelRecordView(String tradeNo, String channelRequestId, String accountId,
             String amount, String currency, String result, String evidenceId, String reasonCode,
             String observedAt, int reconcileAttempts, String nextCheckAt, boolean manualReviewRequired) { }
+
+    // ---- 人工核对 / 恢复重试 ----
+
+    /** 运营填写的操作原因；写操作同时携带 UUID requestId 保证幂等。 */
+    public record ReasonRequest(String reason, String requestId) { }
+
+    /** 人工核对 / 恢复重试的幂等结果。 */
+    public record ManualActionResult(String tradeNo, String action, String status, String channelResult,
+            String conclusion, String requestId, String traceId) { }
 }

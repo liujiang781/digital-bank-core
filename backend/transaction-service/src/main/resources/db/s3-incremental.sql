@@ -25,3 +25,28 @@ CREATE TABLE IF NOT EXISTS mock_channel_deposit (
     CONSTRAINT chk_channel_currency CHECK (currency = 'CNY'),
     CONSTRAINT chk_channel_result CHECK (result IN ('SUCCESS', 'FAILED', 'UNKNOWN'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='模拟渠道入金记录表(S3 专用)';
+
+-- 运营人工核对/恢复重试的幂等留痕：同身份+动作+requestId 只执行一次；同键异内容报冲突。
+-- 本表由 S3 写入；S4 建库时也应包含，避免新库缺少该表。
+CREATE TABLE IF NOT EXISTS trade_manual_action (
+    id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
+    identity_id VARCHAR(64) NOT NULL COMMENT '运营身份(服务端会话核验, 非客户端头)',
+    action VARCHAR(24) NOT NULL COMMENT '动作: RECONCILE/RECOVER',
+    request_id VARCHAR(64) NOT NULL COMMENT '运营填写的 UUID 请求号',
+    request_hash CHAR(64) NOT NULL COMMENT '请求内容 SHA-256, 同键异内容报 409',
+    trade_no VARCHAR(32) NOT NULL COMMENT '关联交易流水号',
+    result_json TEXT NOT NULL COMMENT '幂等结果快照(JSON)',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '首次执行时间',
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_manual_action (identity_id, action, request_id),
+    KEY idx_manual_action_trade (trade_no, action, created_at),
+    CONSTRAINT chk_manual_action CHECK (action IN ('RECONCILE', 'RECOVER'))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='交易人工操作幂等留痕表(S3 专用)';
+
+-- 人工核对/恢复重试会把详细结论码写入 audit_log.result，原 VARCHAR(16) 不足以容纳，
+-- 例如 LOCAL_OUTCOME_FAILED(20)。仅加宽字段，兼容既有 SUCCESS/FAILURE/REJECT 值。
+ALTER TABLE audit_log
+    MODIFY COLUMN result VARCHAR(64) DEFAULT NULL COMMENT '结果: SUCCESS/FAILURE/REJECT 或人工核对结论码';
+-- 原 CHECK 列举仅允许 SUCCESS/FAILURE/REJECT，同样会拒绝结论码；放宽为长度校验。
+ALTER TABLE audit_log DROP CHECK chk_audit_log_result;
+ALTER TABLE audit_log ADD CONSTRAINT chk_audit_log_result CHECK (result IS NULL OR CHAR_LENGTH(result) <= 64);
