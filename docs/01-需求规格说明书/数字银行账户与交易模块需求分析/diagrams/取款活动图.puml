@@ -1,0 +1,83 @@
+@startuml
+title UC-TR-02 取款活动图
+skinparam defaultFontName Microsoft YaHei
+skinparam shadowing false
+skinparam backgroundColor white
+start
+partition 客户 {
+  :选择本人账户、金额、模拟取款渠道；\n以 requestId 提交;
+}
+partition 数字银行系统 {
+  :认证身份并检查付款账户归属;
+  if (有权操作？) then (否)
+    :拒绝且不泄露他人信息;
+    stop
+  else (是)
+  endif
+  if (原请求已存在？) then (是)
+    if (内容一致？) then (是)
+      :返回原 tradeNo 和当前状态;
+    else (否)
+      :返回内容冲突;
+    endif
+    stop
+  else (否)
+  endif
+  :登记 tradeNo / RECEIVED；\n校验金额、NORMAL、A、单笔及原日日额度；\n执行交易风控检查;
+  if (全部通过且可一致受理？) then (否)
+    :REJECTED；无新增资金/额度占用;
+    stop
+  else (是)
+  endif
+  :统一占用资金和受理日额度；\nB 不变、R 加金额，PROCESSING;
+  :以原 tradeNo 发起一次渠道支付;
+}
+partition 模拟资金渠道 {
+  :受理并返回明确成功/明确失败/未知;
+}
+partition 数字银行系统 {
+  :验证渠道结果来源与业务信息;
+  if (获得匹配的明确最终结果？) then (否)
+    :PENDING_CONFIRMATION；保留 R 和原日额度;
+    :自动查询 / UC-TR-08 核对入口；\n按原 tradeNo 查询或接收合法迟到回执;
+    if (仍未知或证据不匹配？) then (是)
+      :保持待确认；进入后续待处理；\n不退款、不重发新支付;
+      stop
+    else (否)
+    endif
+  else (是)
+  endif
+  if (渠道明确已支付？) then (是)
+    repeat
+      :仅幂等完成本地扣账、释放本次 R、扣账流水；\n成功金额仍计原受理日额度;
+      if (本地资金和流水均完整？) then (是)
+        :SUCCESS;
+        stop
+      else (否)
+        :PROCESSING / PENDING_CONFIRMATION;
+        :本地完成重试入口；\n不退款、不再次渠道支付;
+      endif
+    repeat while (现在继续本地重试？) is (是) not (否)
+    :等待后续本地完成;
+    stop
+  else (明确失败且未支付)
+    :保存明确失败依据;
+    repeat
+      :幂等释放本次 R 及原受理日额度；\nB 不变;
+      if (所有恢复义务均完成？) then (是)
+        :FAILED；无本次扣账;
+        stop
+      else (否)
+        :RECOVERING；记录未完成项;
+        :自动恢复 / UC-TR-09 恢复重试入口；\n运营须授权、原因和审计;
+      endif
+    repeat while (现在继续恢复？) is (是) not (否)
+    :保持 RECOVERING，不能显示恢复完成;
+    stop
+  endif
+}
+legend bottom
+A=B-R；占用释放不增加 B，不伪造存款流水。
+已受理后冻结仍可确认或恢复；重复请求/回执不重复资金动作。
+endlegend
+@enduml

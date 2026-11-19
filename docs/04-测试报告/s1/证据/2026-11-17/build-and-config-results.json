@@ -1,0 +1,11 @@
+{
+  "date": "2026-11-17",
+  "frontend_build": "passed",
+  "build_duration": "7.88s",
+  "default_proxy": "http://localhost:8085",
+  "custom_proxy": "http://127.0.0.1:18085",
+  "schema_static_table_count": 13,
+  "schema_static_foreign_key_count": 15,
+  "mysql_runtime_verified": false,
+  "full_browser_business_verified": false
+}

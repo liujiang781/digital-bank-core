@@ -1,0 +1,67 @@
+@startuml
+title UC-TR-03 行内转账活动图
+skinparam defaultFontName Microsoft YaHei
+skinparam shadowing false
+skinparam backgroundColor white
+start
+partition 客户 {
+  :填写本人付款账户、不同收款账户、金额；\n以 requestId 提交;
+}
+partition 数字银行系统 {
+  :认证并检查付款账户归属;
+  if (有权操作？) then (否)
+    :拒绝且不泄露他人信息;
+    stop
+  else (是)
+  endif
+  if (原请求已存在？) then (是)
+    if (内容一致？) then (是)
+      :返回原 tradeNo 及当前状态;
+    else (否)
+      :返回请求内容冲突;
+    endif
+    stop
+  else (否)
+  endif
+  :登记 tradeNo / RECEIVED；\n校验双方 NORMAL、同币种、不同账户；\n校验金额、A、单笔及原日日额度；\n执行交易风控检查;
+  if (全部通过且可一致受理？) then (否)
+    :REJECTED；双方资金不变;
+    stop
+  else (是)
+  endif
+  :统一占用付款资金及受理日额度；\n付款 B 不变、R 加金额；PROCESSING;
+  repeat
+    :以同一 tradeNo 幂等准备双方资金结果；\n准备付款扣账、R 释放、收款入账及关联流水；\n完整匹配确认前不发布为最终资金效果；\n临时收款不计入对外可见的 B、A;
+    if (双方资金与流水完整匹配？) then (是)
+      :统一发布双方资金变化及有效流水；SUCCESS；\n成功额度仍归原受理日;
+      stop
+    else (否)
+    endif
+    if (已确定明确失败并可安全恢复？) then (是)
+      :保存失败恢复决定；\n禁止同时继续完成相反业务;
+      repeat
+        :幂等恢复双方至无本次最终转移；\n释放付款本次 R 与原日额度；\n保留实际资金纠正记录;
+        if (全部恢复完成？) then (是)
+          :FAILED;
+          stop
+        else (否)
+          :RECOVERING；保留未完成义务;
+          :自动恢复 / UC-TR-09 恢复重试入口；\n核验授权、原因及原失败依据;
+        endif
+      repeat while (现在继续恢复？) is (是) not (否)
+      :保持 RECOVERING;
+      stop
+    else (尚未确定失败)
+      :PROCESSING / PENDING_CONFIRMATION；\n保留必要占用及临时资金控制;
+      :自动继续 / UC-TR-08 本地核对重试入口；\n按原 tradeNo 检查双方完成证据;
+    endif
+  repeat while (证据允许现在继续本地完成？) is (是) not (否)
+  :保持待处理；不单方成功、不任意退款;
+  stop
+}
+legend bottom
+没有模拟外部银行参与行内转账；恢复不能以删除历史流水实现。
+同客户不同账户允许转账，仍计付款账户出账限额。
+受理后冻结不取消原交易；重复步骤不会产生第二次资金效果。
+endlegend
+@enduml

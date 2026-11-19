@@ -10,7 +10,7 @@ deploy/
 ├── .env.example              # 环境变量模板，复制为 .env 后填写，.env 不进仓库
 ├── docker-compose.dev.yml    # 本地依赖：MySQL 8.0.36 + Redis 7（可选）
 ├── sql/
-│   ├── schema.sql            # 13 张表 DDL，可重复执行（会 DROP 后重建）
+│   ├── schema.sql            # 16 张表 DDL，可重复执行（会 DROP 后重建）
 │   ├── init-data.sql         # 演示数据，幂等
 │   ├── verify.sql            # 验收脚本，幂等，需 mysql -f 执行
 │   └── set-demo-password.sh  # 运行时生成 BCrypt 哈希并写入三个演示账号
@@ -217,3 +217,10 @@ powershell -ExecutionPolicy Bypass -File deploy/scripts/backup-restore.ps1 -Mode
 - 演示数据脚本必须幂等，方便答辩现场重置。
 - 镜像/产物必须打 tag，不用 `latest`，否则无法回滚。
 - 健康检查返回 UP 只说明进程存活，不代表业务功能已完成。
+
+## S1 增量（来自 main）
+
+- 已有数据库升级只需执行 `deploy/sql/s1-incremental.sql`，不要重跑会清库的 `schema.sql` / `init-data.sql`
+- `schema.sql` 当前为 16 张表、16 条外键（S1 新增 `user_command`、`staff_authorization`、`staff_account_scope`）
+- 管理员与员工认证样例见 `auth-admin.example.yml`、`auth-staff.example.yml`
+- S1 接口与授权说明见 `docs/04-测试报告/s1/S1-用户管理接口交接.md`

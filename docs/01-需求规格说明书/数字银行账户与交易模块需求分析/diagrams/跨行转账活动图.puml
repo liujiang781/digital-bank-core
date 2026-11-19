@@ -1,0 +1,85 @@
+@startuml
+title UC-TR-04 跨行转账活动图
+skinparam defaultFontName Microsoft YaHei
+skinparam shadowing false
+skinparam backgroundColor white
+start
+partition 客户 {
+  :填写本人付款账户、外部银行及收款信息、金额；\n以 requestId 提交;
+}
+partition 数字银行系统 {
+  :认证并检查付款账户归属;
+  if (有权操作？) then (否)
+    :拒绝且不泄露他人信息;
+    stop
+  else (是)
+  endif
+  if (原请求已存在？) then (是)
+    if (内容一致？) then (是)
+      :返回原 tradeNo 与当前状态;
+    else (否)
+      :返回内容冲突;
+    endif
+    stop
+  else (否)
+  endif
+  :登记 tradeNo / RECEIVED；\n校验 NORMAL、金额、CNY、收款字段、A；\n检查系统/个人单笔及原日日额度；执行风控;
+  if (全部通过且可一致受理？) then (否)
+    :REJECTED；不占用、不外付;
+    stop
+  else (是)
+  endif
+  :统一占用付款资金和受理日额度；\nB 不变、R 加金额；PROCESSING;
+  :以唯一 tradeNo 发起一次跨行付款;
+}
+partition 模拟外部银行 {
+  :按业务号幂等受理；\n返回明确成功/明确失败/已受理或未知;
+}
+partition 数字银行系统 {
+  :验证来源、tradeNo、金额、账户、币种;
+  if (有匹配的明确最终结果？) then (否)
+    :PENDING_CONFIRMATION；\n保持 R 和原受理日额度，不退款;
+    :自动查询 / UC-TR-08 运营核对入口；\n仍用原 tradeNo 查询或接收迟到回执;
+    if (仍未知或证据不匹配？) then (是)
+      :保留待确认和占用；\n记录本次核对与运营后续待办;
+      stop
+    else (否)
+    endif
+  else (是)
+  endif
+  if (外部明确成功且可验证？) then (是)
+    repeat
+      :仅幂等完成本地 B 扣减、本次 R 释放；\n写唯一扣账流水，成功额归原受理日;
+      if (本地资金、流水、结果均完整？) then (是)
+        :SUCCESS；可查询流水和回单;
+        stop
+      else (否)
+        :PROCESSING / PENDING_CONFIRMATION；\n保留外部成功依据;
+        :本地完成重试入口（自动或核对）；\n禁止退款、禁止再外付;
+      endif
+    repeat while (现在继续本地重试？) is (是) not (否)
+    :等待后续本地完成；不是失败恢复;
+    stop
+  else (外部明确失败且未付款/已确认取消)
+    :保存稳定且可关联的失败依据;
+    repeat
+      :幂等释放本次 R 及原受理日额度；\nB 不变;
+      if (全部恢复义务已完成？) then (是)
+        :FAILED;
+        stop
+      else (否)
+        :RECOVERING；记录未完成释放项;
+        :自动恢复 / UC-TR-09 重试恢复入口；\n核验授权、原因、原失败依据;
+      endif
+    repeat while (现在继续恢复？) is (是) not (否)
+    :保持 RECOVERING，不冒充恢复完成;
+    stop
+  endif
+}
+legend bottom
+外部“已受理”、超时、仅发送取消请求都不是最终失败依据。
+SUCCESS = 外部明确成功 + 本地扣账/释放/流水完成。
+重复回执不重复扣款；终态矛盾进入异常审查，不直接覆盖余额。
+跨午夜成功或恢复仍计原受理日；受理后冻结不妨碍原业务收敛。
+endlegend
+@enduml

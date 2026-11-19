@@ -1,0 +1,568 @@
+{
+  "executedAt": "2026-11-17T19:05:22.858747+08:00",
+  "database": "isolated H2 2.3.232 (MySQL mode)",
+  "credentialStore": "explicit demo credentials; real BCrypt and in-memory sessions",
+  "services": [
+    "user-service",
+    "account-service",
+    "gateway"
+  ],
+  "ports": {
+    "user-service": 52383,
+    "account-service": 52384,
+    "gateway": 52385
+  },
+  "passed": true,
+  "total": 27,
+  "cases": [
+    {
+      "name": "login-smoke-customer",
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "module": "gateway",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "token": "[redacted]",
+          "tokenType": "Bearer",
+          "expiresAt": "2026-11-17T11:35:20.820488300Z",
+          "customer": {
+            "customerId": "DEMO-CUSTOMER-001",
+            "identityId": "smoke-customer",
+            "roles": [],
+            "accountScope": []
+          }
+        },
+        "traceId": "staff-auth-001"
+      }
+    },
+    {
+      "name": "login-ops-s2",
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "module": "gateway",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "token": "[redacted]",
+          "tokenType": "Bearer",
+          "expiresAt": "2026-11-17T11:35:21.168091100Z",
+          "customer": {
+            "customerId": "STAFF-OPS-S2",
+            "identityId": "ops-s2",
+            "roles": [
+              "OPERATIONS"
+            ],
+            "accountScope": [
+              "S2-ACCOUNT-A"
+            ]
+          }
+        },
+        "traceId": "staff-auth-002"
+      }
+    },
+    {
+      "name": "login-risk-s2",
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "module": "gateway",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "token": "[redacted]",
+          "tokenType": "Bearer",
+          "expiresAt": "2026-11-17T11:35:21.495632800Z",
+          "customer": {
+            "customerId": "STAFF-RISK-S2",
+            "identityId": "risk-s2",
+            "roles": [
+              "RISK"
+            ],
+            "accountScope": [
+              "S2-ACCOUNT-A"
+            ]
+          }
+        },
+        "traceId": "staff-auth-003"
+      }
+    },
+    {
+      "name": "login-ops-no-scope",
+      "method": "POST",
+      "path": "/api/v1/auth/login",
+      "module": "gateway",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "token": "[redacted]",
+          "tokenType": "Bearer",
+          "expiresAt": "2026-11-17T11:35:21.828248900Z",
+          "customer": {
+            "customerId": "STAFF-OPS-NO-SCOPE",
+            "identityId": "ops-no-scope",
+            "roles": [
+              "OPERATIONS"
+            ],
+            "accountScope": []
+          }
+        },
+        "traceId": "staff-auth-004"
+      }
+    },
+    {
+      "name": "verified-staff-scope",
+      "method": "GET",
+      "path": "/api/v1/auth/me",
+      "module": "gateway",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "customerId": "STAFF-OPS-S2",
+          "identityId": "ops-s2",
+          "roles": [
+            "OPERATIONS"
+          ],
+          "accountScope": [
+            "S2-ACCOUNT-A"
+          ]
+        },
+        "traceId": "staff-auth-005"
+      }
+    },
+    {
+      "name": "customer-has-no-staff-grant",
+      "method": "GET",
+      "path": "/api/v1/auth/me",
+      "module": "gateway",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "customerId": "DEMO-CUSTOMER-001",
+          "identityId": "smoke-customer",
+          "roles": [],
+          "accountScope": []
+        },
+        "traceId": "staff-auth-006"
+      }
+    },
+    {
+      "name": "internal-verification-requires-service-token",
+      "method": "GET",
+      "path": "/internal/v1/auth/session",
+      "module": "user-service",
+      "expected": 401,
+      "actual": 401,
+      "passed": true,
+      "response": {
+        "code": "UNAUTHENTICATED",
+        "message": "登录凭证无效或已过期，请重新登录",
+        "data": null,
+        "traceId": "staff-auth-007"
+      }
+    },
+    {
+      "name": "internal-verification-carries-scope",
+      "method": "GET",
+      "path": "/internal/v1/auth/session",
+      "module": "user-service",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "customerId": "STAFF-OPS-S2",
+          "identityId": "ops-s2",
+          "roles": [
+            "OPERATIONS"
+          ],
+          "accountScope": [
+            "S2-ACCOUNT-A"
+          ]
+        },
+        "traceId": "staff-auth-008"
+      }
+    },
+    {
+      "name": "anonymous-freeze-denied",
+      "method": "POST",
+      "path": "/api/v1/accounts/S2-ACCOUNT-A/freeze",
+      "module": "gateway",
+      "expected": 401,
+      "actual": 401,
+      "passed": true,
+      "response": {
+        "code": "UNAUTHENTICATED",
+        "message": "登录凭证无效或已过期，请重新登录",
+        "data": null,
+        "traceId": "staff-auth-009"
+      }
+    },
+    {
+      "name": "customer-freeze-denied",
+      "method": "POST",
+      "path": "/api/v1/accounts/S2-ACCOUNT-A/freeze",
+      "module": "gateway",
+      "expected": 403,
+      "actual": 403,
+      "passed": true,
+      "response": {
+        "code": "FORBIDDEN",
+        "message": "没有此账户的操作权限",
+        "data": null,
+        "traceId": "staff-auth-010"
+      }
+    },
+    {
+      "name": "forged-customer-role-denied",
+      "method": "POST",
+      "path": "/api/v1/accounts/S2-ACCOUNT-A/freeze",
+      "module": "gateway",
+      "expected": 403,
+      "actual": 403,
+      "passed": true,
+      "response": {
+        "code": "FORBIDDEN",
+        "message": "没有此账户的操作权限",
+        "data": null,
+        "traceId": "staff-auth-011"
+      }
+    },
+    {
+      "name": "direct-port-forged-role-denied",
+      "method": "POST",
+      "path": "/api/v1/accounts/S2-ACCOUNT-A/freeze",
+      "module": "account-service",
+      "expected": 403,
+      "actual": 403,
+      "passed": true,
+      "response": {
+        "code": "FORBIDDEN",
+        "message": "没有此账户的操作权限",
+        "data": null,
+        "traceId": "staff-auth-012"
+      }
+    },
+    {
+      "name": "role-without-scope-denied",
+      "method": "POST",
+      "path": "/api/v1/accounts/S2-ACCOUNT-A/freeze",
+      "module": "gateway",
+      "expected": 403,
+      "actual": 403,
+      "passed": true,
+      "response": {
+        "code": "FORBIDDEN",
+        "message": "没有此账户的操作权限",
+        "data": null,
+        "traceId": "staff-auth-013"
+      }
+    },
+    {
+      "name": "out-of-scope-freeze-denied",
+      "method": "POST",
+      "path": "/api/v1/accounts/S2-ACCOUNT-B/freeze",
+      "module": "gateway",
+      "expected": 403,
+      "actual": 403,
+      "passed": true,
+      "response": {
+        "code": "FORBIDDEN",
+        "message": "没有此账户的操作权限",
+        "data": null,
+        "traceId": "staff-auth-014"
+      }
+    },
+    {
+      "name": "forged-scope-cannot-expand-grant",
+      "method": "POST",
+      "path": "/api/v1/accounts/S2-ACCOUNT-B/freeze",
+      "module": "gateway",
+      "expected": 403,
+      "actual": 403,
+      "passed": true,
+      "response": {
+        "code": "FORBIDDEN",
+        "message": "没有此账户的操作权限",
+        "data": null,
+        "traceId": "staff-auth-015"
+      }
+    },
+    {
+      "name": "rejected-actions-leave-B-active",
+      "method": "GET",
+      "path": "/api/v1/accounts/S2-ACCOUNT-B/balance",
+      "module": "gateway",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "accountId": "S2-ACCOUNT-B",
+          "currency": "CNY",
+          "status": "ACTIVE",
+          "bookBalance": "0.00",
+          "reservedAmount": "0.00",
+          "availableBalance": "0.00"
+        },
+        "traceId": "staff-auth-016"
+      }
+    },
+    {
+      "name": "operations-freeze-authorized",
+      "method": "POST",
+      "path": "/api/v1/accounts/S2-ACCOUNT-A/freeze",
+      "module": "gateway",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "accountId": "S2-ACCOUNT-A",
+          "status": "FROZEN",
+          "restrictions": [
+            {
+              "restrictionId": 1,
+              "reason": "OPERATIONS: S1-S2 authorization smoke test"
+            }
+          ]
+        },
+        "traceId": "staff-auth-017"
+      }
+    },
+    {
+      "name": "risk-freeze-authorized",
+      "method": "POST",
+      "path": "/api/v1/accounts/S2-ACCOUNT-A/freeze",
+      "module": "gateway",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "accountId": "S2-ACCOUNT-A",
+          "status": "FROZEN",
+          "restrictions": [
+            {
+              "restrictionId": 1,
+              "reason": "OPERATIONS: S1-S2 authorization smoke test"
+            },
+            {
+              "restrictionId": 2,
+              "reason": "RISK: S1-S2 authorization smoke test"
+            }
+          ]
+        },
+        "traceId": "staff-auth-018"
+      }
+    },
+    {
+      "name": "risk-cannot-unfreeze",
+      "method": "POST",
+      "path": "/api/v1/accounts/S2-ACCOUNT-A/unfreeze",
+      "module": "gateway",
+      "expected": 403,
+      "actual": 403,
+      "passed": true,
+      "response": {
+        "code": "FORBIDDEN",
+        "message": "没有此账户的操作权限",
+        "data": null,
+        "traceId": "staff-auth-019"
+      }
+    },
+    {
+      "name": "customer-cannot-unfreeze",
+      "method": "POST",
+      "path": "/api/v1/accounts/S2-ACCOUNT-A/unfreeze",
+      "module": "gateway",
+      "expected": 403,
+      "actual": 403,
+      "passed": true,
+      "response": {
+        "code": "FORBIDDEN",
+        "message": "没有此账户的操作权限",
+        "data": null,
+        "traceId": "staff-auth-020"
+      }
+    },
+    {
+      "name": "operations-unfreeze-authorized",
+      "method": "POST",
+      "path": "/api/v1/accounts/S2-ACCOUNT-A/unfreeze",
+      "module": "gateway",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "accountId": "S2-ACCOUNT-A",
+          "status": "ACTIVE"
+        },
+        "traceId": "staff-auth-021"
+      }
+    },
+    {
+      "name": "account-active-after-release",
+      "method": "GET",
+      "path": "/api/v1/accounts/S2-ACCOUNT-A/balance",
+      "module": "gateway",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "accountId": "S2-ACCOUNT-A",
+          "currency": "CNY",
+          "status": "ACTIVE",
+          "bookBalance": "0.00",
+          "reservedAmount": "0.00",
+          "availableBalance": "0.00"
+        },
+        "traceId": "staff-auth-022"
+      }
+    },
+    {
+      "name": "successful-actions-audited",
+      "method": "GET",
+      "path": "/api/v1/accounts/S2-ACCOUNT-A/operations",
+      "module": "gateway",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "items": [
+            {
+              "operationId": 3,
+              "action": "ACCOUNT_UNFREEZE",
+              "reason": "解除依据: Both smoke restrictions resolved",
+              "result": "SUCCESS",
+              "occurredAt": "2026-11-17T19:05:22.619339+08:00"
+            },
+            {
+              "operationId": 2,
+              "action": "ACCOUNT_FREEZE",
+              "reason": "S1-S2 authorization smoke test",
+              "result": "SUCCESS",
+              "occurredAt": "2026-11-17T19:05:22.519642+08:00"
+            },
+            {
+              "operationId": 1,
+              "action": "ACCOUNT_FREEZE",
+              "reason": "S1-S2 authorization smoke test",
+              "result": "SUCCESS",
+              "occurredAt": "2026-11-17T19:05:22.476673+08:00"
+            }
+          ],
+          "total": 3,
+          "page": 1,
+          "pageSize": 20
+        },
+        "traceId": "staff-auth-023"
+      }
+    },
+    {
+      "name": "freeze-release-create-no-fund-flow",
+      "method": "GET",
+      "path": "/api/v1/accounts/S2-ACCOUNT-A/fund-entries",
+      "module": "gateway",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "items": [],
+          "total": 0,
+          "page": 1,
+          "pageSize": 20
+        },
+        "traceId": "staff-auth-024"
+      }
+    },
+    {
+      "name": "logout-staff",
+      "method": "POST",
+      "path": "/api/v1/auth/logout",
+      "module": "gateway",
+      "expected": 200,
+      "actual": 200,
+      "passed": true,
+      "response": {
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": null,
+        "traceId": "staff-auth-025"
+      }
+    },
+    {
+      "name": "revoked-at-gateway",
+      "method": "POST",
+      "path": "/api/v1/accounts/S2-ACCOUNT-A/freeze",
+      "module": "gateway",
+      "expected": 401,
+      "actual": 401,
+      "passed": true,
+      "response": {
+        "code": "UNAUTHENTICATED",
+        "message": "登录凭证无效或已过期，请重新登录",
+        "data": null,
+        "traceId": "staff-auth-026"
+      }
+    },
+    {
+      "name": "revoked-at-account-service",
+      "method": "POST",
+      "path": "/api/v1/accounts/S2-ACCOUNT-A/freeze",
+      "module": "account-service",
+      "expected": 401,
+      "actual": 401,
+      "passed": true,
+      "response": {
+        "code": "UNAUTHENTICATED",
+        "message": "登录凭证无效或已过期，请重新登录",
+        "data": null,
+        "traceId": "staff-auth-027"
+      }
+    }
+  ]
+}

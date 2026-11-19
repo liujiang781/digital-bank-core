@@ -1,0 +1,52 @@
+@startuml
+skinparam defaultFontName "Microsoft YaHei"
+title 图 2-1 逻辑架构：分层与业务子域
+package "web" as web {
+  [浏览器界面] as ui
+}
+package "gateway" as gateway {
+  [统一入口] as gw
+}
+package "service（应用服务）" {
+  package "user-service" as us {
+  [用户应用服务] as u
+}
+  package "transaction-service" as ts {
+  [交易编排服务] as t
+}
+  package "risk-service" as rs {
+  [风控应用服务] as r
+}
+  package "account-service" as acs {
+  [账户及原子记账服务] as a
+}
+}
+package "domain（领域模型）" {
+  package "user" as ud
+  package "transaction" as td
+  package "risk" as rd
+  package "account" as ad
+}
+package "infra（基础设施适配）" {
+  [持久化及外部模拟适配] as infra
+}
+ui --> gw
+gw --> u
+gw --> t
+gw --> a
+gw --> r
+t --> r : 风控检查
+t --> a : 原子记账命令
+u --> ud
+t --> td
+r --> rd
+a --> ad
+ud --> infra
+td --> infra
+rd --> infra
+ad --> infra
+note bottom of acs
+账户服务独占本行转账资金事务的写入；
+交易服务不跨服务持有数据库事务。
+end note
+@enduml

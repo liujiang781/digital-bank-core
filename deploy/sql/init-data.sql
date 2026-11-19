@@ -1,6 +1,9 @@
 SET NAMES utf8mb4;
 USE payment_db;
 
+DELETE FROM staff_account_scope;
+DELETE FROM staff_authorization;
+DELETE FROM user_command;
 DELETE FROM mock_channel_deposit;
 DELETE FROM audit_log;
 DELETE FROM account_command;
@@ -23,14 +26,12 @@ ON DUPLICATE KEY UPDATE
   name = VALUES(name), phone = VALUES(phone), email = VALUES(email),
   real_name_status = VALUES(real_name_status), status = VALUES(status);
 
--- 初始演示口令（与 S2/S3 文档一致）：zhangsan/lisi = demo123，admin = admin123
--- 下面两串是 BCrypt($2a$12) 哈希，不是明文；交付演示用，正式环境请执行 set-demo-password.sh 改掉
 INSERT INTO credential (customer_id, username, password_hash, credential_type, status) VALUES
-  ('CUS-0001', 'zhangsan', '$2a$12$AfkFGbq5QdbVyQYHptr6Rucmua2UkjOBRkyhBX6tKuCg.5twy90F6', 'USERNAME', 'NORMAL'),
-  ('CUS-0002', 'lisi',     '$2a$12$AfkFGbq5QdbVyQYHptr6Rucmua2UkjOBRkyhBX6tKuCg.5twy90F6', 'USERNAME', 'NORMAL'),
-  ('CUS-ADMIN','admin',    '$2a$12$UAhzdrYllcbqmyReLiW5ZOWZkJR5qHl1QQy5BQcC1VpJ2QsO74Sde', 'USERNAME', 'NORMAL')
+  ('CUS-0001', 'zhangsan', '$2a$12$NBP0BKTPbnQ4xufuZWjSKu6mmkiEHFJ2yp.m2ditNCn2Dern93.yy', 'USERNAME', 'NORMAL'),
+  ('CUS-0002', 'lisi',     '$2a$12$NBP0BKTPbnQ4xufuZWjSKu6mmkiEHFJ2yp.m2ditNCn2Dern93.yy', 'USERNAME', 'NORMAL'),
+  ('CUS-ADMIN','admin',    '$2a$12$RVbq8PQr7RxzHb6FXPaPPuVFOKUZyMpOmjUWhHib90qIyivlDfoKW',  'USERNAME', 'NORMAL')
 ON DUPLICATE KEY UPDATE
-  status = VALUES(status);
+  password_hash = VALUES(password_hash), status = VALUES(status);
 
 INSERT INTO account (account_id, customer_id, currency, status, book_balance, reserved_amount) VALUES
   ('ACC_S2_001', 'CUS-0001', 'CNY', 'ACTIVE', 50000.00, 0.00),

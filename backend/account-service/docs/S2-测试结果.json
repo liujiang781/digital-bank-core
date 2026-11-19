@@ -1,0 +1,85 @@
+{
+  "sourceBaseline": "f331eabb2d82d10a15fd23d809af096f0a55a5e4",
+  "runs": [
+    {
+      "database": "H2 MySQL mode",
+      "jvmTimezone": "UTC",
+      "java": "21.0.9",
+      "completedAt": "2026-11-10T15:10:17.4151479+08:00",
+      "suites": [
+        {
+          "suite": "com.digitalbank.account.AccountLifecycleIntegrationTest",
+          "tests": 15,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "seconds": 4.815
+        },
+        {
+          "suite": "com.digitalbank.account.PostingIntegrationTest",
+          "tests": 22,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "seconds": 0.926
+        },
+        {
+          "suite": "com.digitalbank.account.security.SecurityBoundaryTest",
+          "tests": 6,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "seconds": 0.036
+        },
+        {
+          "suite": "com.digitalbank.account.support.InputContractTest",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "seconds": 0.004
+        }
+      ]
+    },
+    {
+      "database": "MySQL 8.4.13 InnoDB",
+      "jvmTimezone": "UTC",
+      "java": "21.0.9",
+      "completedAt": "2026-11-10T15:17:05.6759497+08:00",
+      "suites": [
+        {
+          "suite": "com.digitalbank.account.AccountLifecycleIntegrationTest",
+          "tests": 15,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "seconds": 40.461
+        },
+        {
+          "suite": "com.digitalbank.account.PostingIntegrationTest",
+          "tests": 22,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "seconds": 6.456
+        },
+        {
+          "suite": "com.digitalbank.account.security.SecurityBoundaryTest",
+          "tests": 6,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "seconds": 0.177
+        },
+        {
+          "suite": "com.digitalbank.account.support.InputContractTest",
+          "tests": 4,
+          "failures": 0,
+          "errors": 0,
+          "skipped": 0,
+          "seconds": 0.007
+        }
+      ]
+    }
+  ]
+}

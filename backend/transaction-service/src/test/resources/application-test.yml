@@ -1,0 +1,26 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:transaction_test;MODE=MySQL;DB_CLOSE_DELAY=-1
+    username: sa
+    password: ""
+    hikari:
+      # H2 不认识 MySQL 的 SET time_zone，测试环境改用 H2 等价语法
+      connection-init-sql: SET TIME ZONE 'Asia/Shanghai'
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-test.sql
+transaction:
+  internal-token: test-internal-token-value-32-bytes-aaaa
+account:
+  base-url: http://localhost:59999
+  internal-token: test-account-token-32-bytes-aaaaaaaaaaaa
+risk:
+  base-url: http://localhost:59998
+  internal-token: test-risk-token-32-bytes-aaaaaaaaaaaaaa
+mock-channel:
+  result: SUCCESS
+recovery:
+  # 测试期间不触发恢复扫描
+  interval-millis: 3600000
+  initial-delay-millis: 3600000

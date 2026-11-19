@@ -1,0 +1,25 @@
+# 仅用户服务加载：--spring.config.additional-location=file:/绝对路径/auth-staff.example.yml
+# 默认不启用 demo；测试密码由环境变量提供，不在配置中保存实际密码。
+auth:
+  demo:
+    users:
+      ops-s2:
+        customer-id: STAFF-OPS-S2
+        password: ${BANK_OPERATIONS_PASSWORD:}
+      risk-s2:
+        customer-id: STAFF-RISK-S2
+        password: ${BANK_RISK_PASSWORD:}
+      ops-no-scope:
+        customer-id: STAFF-NO-SCOPE
+        password: ${BANK_NO_SCOPE_PASSWORD:}
+  staff:
+    grants:
+      ops-s2:
+        roles: [OPERATIONS]
+        account-scope: ["${BANK_OPERATIONS_ACCOUNT_ID:S2-ACCOUNT-A}"]
+      risk-s2:
+        roles: [RISK]
+        account-scope: ["${BANK_OPERATIONS_ACCOUNT_ID:S2-ACCOUNT-A}"]
+      ops-no-scope:
+        roles: [OPERATIONS]
+        account-scope: []

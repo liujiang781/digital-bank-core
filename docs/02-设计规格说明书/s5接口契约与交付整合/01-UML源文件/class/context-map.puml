@@ -1,0 +1,84 @@
+@startuml context-map
+' 图 2-13 限界上下文映射（成员 E）
+' 渲染：render_all.py 或 java -jar plantuml.jar -tsvg context-map.puml
+!pragma layout smetana
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 14
+skinparam shadowing false
+skinparam backgroundColor #FFFFFF
+skinparam rectangle {
+  BackgroundColor #F8F8F8
+  BorderColor #555555
+}
+skinparam ArrowColor #4A5568
+title 图 2-13 限界上下文映射：user / account / transaction / risk
+
+left to right direction
+
+rectangle "用户上下文\nuser-service\n─────────────\n客户、认证、会话、实名\n（Customer / credential）" as User
+rectangle "账户上下文\naccount-service\n─────────────\n账户生命周期、余额 B/R/A、\n资金记账、不可变流水\n（Account / FundEntry）" as Account
+rectangle "交易上下文\ntransaction-service\n─────────────\n受理与幂等、出账编排、\n模拟渠道交互、交易查询\n（Transaction / TransferOrder）" as Txn
+rectangle "风控上下文\nrisk-service\n─────────────\n限额规则求值、账户状态规则、\n风控事件留痕\n（RiskRule / RiskEvent）" as Risk
+
+User ..> Account : 身份与对象范围\n（经 AccessService 防腐层）
+User ..> Txn : 身份与对象范围\n（经 AccessService 防腐层）
+User ..> Risk : 岗位与对象授权\n（经 AccessService 防腐层）
+
+Txn --> Account : 记账命令 reserve / post /\nrelease / complete\n（Customer-Supplier，ACL 见下方）
+Txn --> Risk : 出账与存款限额求值\n（账户快照入、RiskDecision 出）
+
+note as SK
+共享内核（Shared Kernel）
+账户与交易上下文共同拥有：
+· Money 值对象（CNY、两位小数语义）
+· identityId / tradeNo / BusinessType 标识
+· TransactionStatus 状态机语义
+（RECEIVED→…→SUCCEEDED/FAILED，
+终态不可重开）
+变更须 B、C 联合评审。
+作用：幂等键、对账与流水追溯
+在两个上下文里语义一致。
+end note
+Account .. SK
+Txn .. SK
+
+note as ACL1
+防腐层（ACL）①交易 → 账户
+交易上下文只发 PostingCommand
+命令模型，不直接读写 Account；
+账户独占资金写入（ADR-002 单库
+本地事务），模型互不泄漏。
+end note
+Txn .. ACL1
+ACL1 .. Account
+
+note as ACL2
+防腐层（ACL）②交易 → 风控
+交易上下文传账户快照与金额，
+换回 RiskDecision；风控不感知
+交易内部模型，规则演进不波及
+交易核心（反向也成立）。
+end note
+Txn .. ACL2
+ACL2 .. Risk
+
+note bottom of Account
+为什么账户与交易要拆开：
+1. 写入职责隔离：资金写入（余额、占用、
+   流水）集中在账户上下文的单一本地事务
+   （ADR-002）；受理编排归交易上下文。
+   合并则每次受理改动都触碰资金代码。
+2. 变更节奏不同：余额不变式（BR-04：
+   A=B−R、B≥0、0≤R≤B）与流水不可变
+   （BR-19）几乎不变；受理、幂等、渠道、
+   恢复流程（BR-11/12/16/17）频繁演进。
+3. 故障隔离：交易编排故障不阻塞余额查询、
+   冻结等账户操作（NFR-06/08）。
+4. 团队分工：B、C 按上下文并行设计与
+   评审，边界即评审边界。
+代价：跨上下文调用需命令模型、幂等与
+恢复（RECOVERING 状态），已由
+ADR-002（本地事务）与 ADR-003（唯一
+索引幂等）缓解。
+end note
+@enduml

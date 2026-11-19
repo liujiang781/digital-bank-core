@@ -1,0 +1,53 @@
+@startuml
+skinparam defaultFontName "Microsoft YaHei"
+title 图 2-2 物理部署架构（设计方案）
+node "客户端" {
+  artifact "浏览器" as browser
+}
+node "反向代理节点" {
+  artifact "Nginx" as nginx
+}
+node "网关节点" {
+  artifact "Gateway" as gateway
+}
+node "用户服务节点" {
+  artifact "user-service" as user
+}
+node "交易服务节点" {
+  artifact "transaction-service" as tx
+}
+node "风控服务节点" {
+  artifact "risk-service" as risk
+}
+node "账户服务节点" {
+  artifact "account-service" as account
+}
+node "数据库主节点" {
+  database "MySQL 主库" as master
+}
+node "数据库从节点" {
+  database "MySQL 从库" as replica
+}
+node "缓存节点（可选）" {
+  database "Redis" as redis
+}
+browser --> nginx
+nginx --> gateway
+gateway --> user
+gateway --> tx
+gateway --> risk
+gateway --> account
+tx --> risk
+tx --> account
+user --> master
+tx --> master
+risk --> master
+account --> master : 原子记账读写
+master --> replica : 异步复制
+user ..> redis : 可选缓存
+note bottom of replica
+资金校验及结果确认读取主库；
+从库仅用于容忍延迟的查询。
+Redis 是否启用由 ADR-005 决定。
+end note
+@enduml

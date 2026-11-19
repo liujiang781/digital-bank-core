@@ -60,7 +60,7 @@
 | 层次 | 选型 | 状态 | 说明 |
 |---|---|---|---|
 | 前端 | Vue 3 + Vite + Element Plus | 待定 | 备选 React + Ant Design |
-| 后端 | Spring Boot 3 (Java 17) | 待定 | 备选 Express.js / Django |
+| 后端 | Spring Boot 3 (Java 21) | 待定 | 备选 Express.js / Django |
 | 服务注册与配置 | Nacos / Eureka | 待定 | 视后端语言而定 |
 | 网关 | Spring Cloud Gateway | 待定 | 统一鉴权、路由 |
 | 数据库 | MySQL 8 | 待定 | 账户/交易强一致，需事务 |

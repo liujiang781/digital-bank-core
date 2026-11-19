@@ -1,0 +1,1919 @@
+{
+  "schemaVersion": "1.0",
+  "baseline": {
+    "path": "D:/software engineering/实验一需求规格说明书.docx",
+    "version": "整合版 v1.2",
+    "authority": "唯一业务需求基线",
+    "taskPlan": "D:/software engineering/实验二_成员B执行计划.md",
+    "repositoryModification": false
+  },
+  "scope": {
+    "role": "成员B/账户域",
+    "status": "本地设计成果，未经小组联合评审",
+    "classDiagramPanels": [
+      "design-class-core",
+      "design-class-collaboration"
+    ],
+    "cProposalEntities": [
+      "TransferOrder",
+      "RiskRule",
+      "RiskEvent"
+    ]
+  },
+  "classes": [
+    {
+      "name": "Customer",
+      "category": "entity",
+      "designStatus": "local-design",
+      "sourceRefs": [
+        "实验一需求规格说明书.docx 表1-4"
+      ],
+      "attributes": [
+        {
+          "name": "customerId",
+          "type": "String",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "客户唯一标识；创建后稳定",
+          "nullability": "否",
+          "sourceRefs": [
+            "表 1-4 Customer"
+          ],
+          "designAdded": "字段名细化"
+        },
+        {
+          "name": "identityId",
+          "type": "String",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "绑定认证身份；同一客户绑定身份唯一；不保存令牌",
+          "nullability": "否",
+          "sourceRefs": [
+            "表 1-4；NFR-01/07"
+          ],
+          "designAdded": "身份映射设计"
+        },
+        {
+          "name": "realNameStatus",
+          "type": "RealNameStatus",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "反映模拟实名状态；枚举见第 3 节",
+          "nullability": "否",
+          "sourceRefs": [
+            "UC-ID-01；表 1-4"
+          ],
+          "designAdded": "枚举设计"
+        }
+      ],
+      "operations": []
+    },
+    {
+      "name": "Account",
+      "category": "entity",
+      "designStatus": "local-design",
+      "sourceRefs": [
+        "实验一需求规格说明书.docx 表1-4"
+      ],
+      "attributes": [
+        {
+          "name": "accountId",
+          "type": "String",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "本行账户唯一标识；创建后稳定",
+          "nullability": "否",
+          "sourceRefs": [
+            "UC-AC-01；表 1-4"
+          ],
+          "designAdded": "字段名细化"
+        },
+        {
+          "name": "customerId",
+          "type": "String",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "恰好归属一个 Customer；不能任意改归属",
+          "nullability": "否",
+          "sourceRefs": [
+            "表 1-4；BR-20"
+          ],
+          "designAdded": "关联键设计"
+        },
+        {
+          "name": "currency",
+          "type": "Currency",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "固定为 CNY",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-01"
+          ],
+          "designAdded": "枚举设计"
+        },
+        {
+          "name": "status",
+          "type": "AccountStatus",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "NORMAL、FROZEN、CLOSED；正常和冻结均计入未注销数；UC-AC-07 规定注销须 B=R=0 且无未决交易",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-02/03/09；UC-AC-07"
+          ],
+          "designAdded": "枚举设计"
+        },
+        {
+          "name": "bookBalance",
+          "type": "Decimal",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "账面余额 B≥0；开户初始 0",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-02/04"
+          ],
+          "designAdded": "字段名细化"
+        },
+        {
+          "name": "reservedAmount",
+          "type": "Decimal",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "占用 R，0≤R≤B；开户初始 0",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-02/04/14"
+          ],
+          "designAdded": "字段名细化"
+        },
+        {
+          "name": "activeFreezeReasonIds",
+          "type": "Set<String>",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "有效冻结原因引用集合；清空全部有效原因并有解除依据后才允许运营解冻",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-09；NFR-10"
+          ],
+          "designAdded": "原因关联设计"
+        },
+        {
+          "name": "personalSingleLimit",
+          "type": "Decimal",
+          "nullable": true,
+          "visibility": "private",
+          "constraints": "可选个人出账单笔限额；正数、两位小数；适用限额取个人与全局较严者",
+          "nullability": "是",
+          "sourceRefs": [
+            "UC-AC-08；BR-05"
+          ],
+          "designAdded": "个人限额设计建议"
+        },
+        {
+          "name": "personalDailyLimit",
+          "type": "Decimal",
+          "nullable": true,
+          "visibility": "private",
+          "constraints": "可选个人出账日限额；正数、两位小数；不替代全局限额",
+          "nullability": "是",
+          "sourceRefs": [
+            "UC-AC-08；BR-05"
+          ],
+          "designAdded": "个人限额设计建议"
+        },
+        {
+          "name": "version",
+          "type": "Integer",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "从 0 递增；并发条件提交或等效锁机制使用；同一提交读取和验证",
+          "nullability": "否",
+          "sourceRefs": [
+            "NFR-02；BR-04"
+          ],
+          "designAdded": "并发控制设计"
+        }
+      ],
+      "operations": [
+        {
+          "name": "availableBalance",
+          "parameters": [],
+          "returns": "Decimal",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Return A=B-R from the same account version.",
+          "contextParametersOmitted": true
+        },
+        {
+          "name": "assertCanAcceptNewDeposit",
+          "parameters": [],
+          "returns": "void",
+          "visibility": "public",
+          "static": false,
+          "semantics": "New request only; require NORMAL; recheck inside admission commit. Do not call to reject an accepted transaction solely because it is now FROZEN.",
+          "contextParametersOmitted": true
+        },
+        {
+          "name": "credit",
+          "parameters": [
+            {
+              "name": "amount",
+              "type": "Decimal"
+            }
+          ],
+          "returns": "void",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Positive exact amount; invoked only inside PostingService business commit.",
+          "contextParametersOmitted": false
+        },
+        {
+          "name": "reserve",
+          "parameters": [
+            {
+              "name": "amount",
+              "type": "Decimal"
+            }
+          ],
+          "returns": "void",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Positive amount not exceeding available balance; preserve 0<=R<=B.",
+          "contextParametersOmitted": false
+        },
+        {
+          "name": "debitReserved",
+          "parameters": [
+            {
+              "name": "amount",
+              "type": "Decimal"
+            }
+          ],
+          "returns": "void",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Debit B and release corresponding R together; C collaboration input.",
+          "contextParametersOmitted": false
+        },
+        {
+          "name": "release",
+          "parameters": [
+            {
+              "name": "amount",
+              "type": "Decimal"
+            }
+          ],
+          "returns": "void",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Release a prior reservation once; cannot make R negative; C collaboration input.",
+          "contextParametersOmitted": false
+        }
+      ]
+    },
+    {
+      "name": "Transaction",
+      "category": "entity",
+      "designStatus": "local-design",
+      "sourceRefs": [
+        "实验一需求规格说明书.docx 表1-4"
+      ],
+      "attributes": [
+        {
+          "name": "tradeNo",
+          "type": "String",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "全局唯一交易号；资金与外部处理沿用原号",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-11/12；NFR-03"
+          ],
+          "designAdded": "字段名细化"
+        },
+        {
+          "name": "identityId",
+          "type": "String",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "发起身份；是幂等作用域的一部分；不替代对象权限检查",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-11/12/20"
+          ],
+          "designAdded": "幂等作用域设计"
+        },
+        {
+          "name": "businessType",
+          "type": "BusinessType",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "DEPOSIT、WITHDRAWAL、INTERNAL_TRANSFER、EXTERNAL_TRANSFER",
+          "nullability": "否",
+          "sourceRefs": [
+            "UC-TR-01～04；BR-11/12"
+          ],
+          "designAdded": "枚举设计"
+        },
+        {
+          "name": "requestId",
+          "type": "String",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "同一身份、业务类型内由客户端提供的请求标识；不可重新分配以绕过重试语义",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-11/12；NFR-03"
+          ],
+          "designAdded": "字段名细化"
+        },
+        {
+          "name": "requestHash",
+          "type": "String",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "规范化业务内容摘要；不得将非法精度舍入为合法金额；同幂等键摘要不同时冲突",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-11/12"
+          ],
+          "designAdded": "内容冲突检测设计"
+        },
+        {
+          "name": "accountId",
+          "type": "String",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "请求主账户；存款为入账账户，出账为付款账户",
+          "nullability": "否",
+          "sourceRefs": [
+            "表 1-4；UC-TR-01～04"
+          ],
+          "designAdded": "关联角色设计"
+        },
+        {
+          "name": "amount",
+          "type": "Decimal",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "合法已受理交易为正数、最多两位小数；非法请求细节留在处理记录，不能伪造成合法交易金额",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-01/13/14"
+          ],
+          "designAdded": "字段名细化"
+        },
+        {
+          "name": "currency",
+          "type": "Currency",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "固定为 CNY",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-01"
+          ],
+          "designAdded": "枚举设计"
+        },
+        {
+          "name": "status",
+          "type": "TransactionStatus",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "七种状态见第 3 节；终态不能被迟到未知结果覆盖",
+          "nullability": "否",
+          "sourceRefs": [
+            "2.4 交易处理状态；NFR-06"
+          ],
+          "designAdded": "状态机设计"
+        },
+        {
+          "name": "createdAt",
+          "type": "Instant",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "交易记录创建时间",
+          "nullability": "否",
+          "sourceRefs": [
+            "NFR-03"
+          ],
+          "designAdded": "时间字段设计"
+        },
+        {
+          "name": "acceptedAt",
+          "type": "Instant",
+          "nullable": true,
+          "visibility": "private",
+          "constraints": "正常账户及金额/限额通过，并完成受理提交的时间；受理前为空",
+          "nullability": "是",
+          "sourceRefs": [
+            "BR-03/13；NFR-03"
+          ],
+          "designAdded": "区分已受理设计"
+        },
+        {
+          "name": "completedAt",
+          "type": "Instant",
+          "nullable": true,
+          "visibility": "private",
+          "constraints": "进入 REJECTED、SUCCEEDED 或 FAILED 时记录；非终态为空",
+          "nullability": "是",
+          "sourceRefs": [
+            "2.4 处理状态；NFR-03"
+          ],
+          "designAdded": "终态时间设计"
+        },
+        {
+          "name": "channelEvidenceId",
+          "type": "String",
+          "nullable": true,
+          "visibility": "private",
+          "constraints": "最近已验证渠道依据的引用；不得存完整令牌或敏感原始报文",
+          "nullability": "是",
+          "sourceRefs": [
+            "BR-13；NFR-03/09"
+          ],
+          "designAdded": "可追溯依据设计"
+        },
+        {
+          "name": "lastChannelResult",
+          "type": "ChannelResultCode",
+          "nullable": true,
+          "visibility": "private",
+          "constraints": "最近已验证的渠道结果；无依据为空；不得覆盖本地已确定终态",
+          "nullability": "是",
+          "sourceRefs": [
+            "BR-13/16/17；NFR-05"
+          ],
+          "designAdded": "核对状态设计"
+        },
+        {
+          "name": "lastCheckedAt",
+          "type": "Instant",
+          "nullable": true,
+          "visibility": "private",
+          "constraints": "最近一次渠道查询或回执核对时间",
+          "nullability": "是",
+          "sourceRefs": [
+            "UC-TR-08；NFR-05"
+          ],
+          "designAdded": "核对时间设计"
+        },
+        {
+          "name": "failureReason",
+          "type": "String",
+          "nullable": true,
+          "visibility": "private",
+          "constraints": "拒绝/失败原因码或脱敏说明；不混存资金流水",
+          "nullability": "是",
+          "sourceRefs": [
+            "BR-19/20；NFR-06"
+          ],
+          "designAdded": "可解释反馈设计"
+        }
+      ],
+      "operations": [
+        {
+          "name": "snapshot",
+          "parameters": [],
+          "returns": "TransactionSnapshot",
+          "visibility": "public",
+          "static": false,
+          "semantics": "See account-domain design specification and sequence diagram; omitted context parameters are carried in request/identity value objects.",
+          "contextParametersOmitted": true
+        },
+        {
+          "name": "markProcessing",
+          "parameters": [],
+          "returns": "void",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Admission after atomic status/limit recheck; set acceptedAt; may not dispatch channel before admission commits.",
+          "contextParametersOmitted": true
+        },
+        {
+          "name": "markPending",
+          "parameters": [],
+          "returns": "void",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Conditional transition for unresolved accepted transactions; never downgrade terminal states.",
+          "contextParametersOmitted": true
+        },
+        {
+          "name": "markSucceeded",
+          "parameters": [],
+          "returns": "void",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Only within successful complete business posting.",
+          "contextParametersOmitted": true
+        },
+        {
+          "name": "markFailed",
+          "parameters": [],
+          "returns": "void",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Only after verified failure and all required release/recovery; deposit failure has no posting.",
+          "contextParametersOmitted": true
+        },
+        {
+          "name": "markRejected",
+          "parameters": [],
+          "returns": "void",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Pre-admission rejection; acceptedAt remains absent.",
+          "contextParametersOmitted": true
+        },
+        {
+          "name": "isTerminal",
+          "parameters": [],
+          "returns": "Boolean",
+          "visibility": "public",
+          "static": false,
+          "semantics": "REJECTED, SUCCEEDED and FAILED are terminal.",
+          "contextParametersOmitted": true
+        },
+        {
+          "name": "recordEvidence",
+          "parameters": [
+            {
+              "name": "result",
+              "type": "ChannelResult"
+            }
+          ],
+          "returns": "void",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Retain verified source, original tradeNo and matching business content before posting; contradictory proof requires reconciliation.",
+          "contextParametersOmitted": false
+        }
+      ]
+    },
+    {
+      "name": "FundEntry",
+      "category": "entity",
+      "designStatus": "local-design",
+      "sourceRefs": [
+        "实验一需求规格说明书.docx 表1-4"
+      ],
+      "attributes": [
+        {
+          "name": "entryId",
+          "type": "String",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "资金事件唯一标识；创建后不可修改",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-19"
+          ],
+          "designAdded": "流水主标识设计"
+        },
+        {
+          "name": "tradeNo",
+          "type": "String",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "恰好关联一笔交易；保留原交易追踪号",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-19；NFR-03"
+          ],
+          "designAdded": "关联键设计"
+        },
+        {
+          "name": "accountId",
+          "type": "String",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "恰好属于一个账户；与 Transaction 的主账户角色不混淆",
+          "nullability": "否",
+          "sourceRefs": [
+            "表 1-4 FundEntry"
+          ],
+          "designAdded": "关联键设计"
+        },
+        {
+          "name": "entryRole",
+          "type": "EntryRole",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "账户在该资金事件中的角色；用于业务去重；同交易同账户同角色唯一",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-11/12/15/19"
+          ],
+          "designAdded": "资金效果去重设计"
+        },
+        {
+          "name": "direction",
+          "type": "EntryDirection",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "CREDIT 或 DEBIT；仅实际入账、扣账或已生效纠正产生",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-19"
+          ],
+          "designAdded": "方向枚举设计"
+        },
+        {
+          "name": "amount",
+          "type": "Decimal",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "正数、最多两位小数；方向由 direction 表达",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-01/19"
+          ],
+          "designAdded": "字段名细化"
+        },
+        {
+          "name": "bookBalanceAfter",
+          "type": "Decimal",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "同次业务提交后的该账户 B，≥0；用于核对追溯",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-04/19；NFR-03"
+          ],
+          "designAdded": "核对快照设计"
+        },
+        {
+          "name": "occurredAt",
+          "type": "Instant",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "实际资金变化提交时间；非请求提交时间",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-13/19；NFR-03"
+          ],
+          "designAdded": "事件时间设计"
+        }
+      ],
+      "operations": [
+        {
+          "name": "creditOf",
+          "parameters": [],
+          "returns": "FundEntry",
+          "visibility": "public",
+          "static": true,
+          "semantics": "Factory for immutable actual credit event; caller supplies accepted transaction/account/amount/posting context.",
+          "contextParametersOmitted": true
+        },
+        {
+          "name": "debitOf",
+          "parameters": [],
+          "returns": "FundEntry",
+          "visibility": "public",
+          "static": true,
+          "semantics": "Factory for immutable actual debit event; caller supplies accepted transaction/account/amount/posting context.",
+          "contextParametersOmitted": true
+        }
+      ]
+    },
+    {
+      "name": "TransferOrder",
+      "category": "entity",
+      "designStatus": "local-proposal-awaiting-C",
+      "sourceRefs": [
+        "实验一需求规格说明书.docx 表1-4"
+      ],
+      "attributes": [
+        {
+          "name": "transferId",
+          "type": "String",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "转账单唯一标识",
+          "nullability": "否",
+          "sourceRefs": [
+            "表 1-4 TransferOrder"
+          ],
+          "designAdded": "字段名细化"
+        },
+        {
+          "name": "tradeNo",
+          "type": "String",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "唯一关联一笔转账交易；交易类型必须与 transferType 相符",
+          "nullability": "否",
+          "sourceRefs": [
+            "表 1-4；BR-15/16/17"
+          ],
+          "designAdded": "关联键设计"
+        },
+        {
+          "name": "transferType",
+          "type": "TransferType",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "INTERNAL 或 EXTERNAL",
+          "nullability": "否",
+          "sourceRefs": [
+            "UC-TR-03/04"
+          ],
+          "designAdded": "枚举设计"
+        },
+        {
+          "name": "payerAccountId",
+          "type": "String",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "付款方本行账户；与 Transaction.accountId 一致",
+          "nullability": "否",
+          "sourceRefs": [
+            "表 1-4；BR-14/15"
+          ],
+          "designAdded": "双账户角色设计"
+        },
+        {
+          "name": "payeeAccountId",
+          "type": "String",
+          "nullable": true,
+          "visibility": "private",
+          "constraints": "本行转账必填；跨行为空；指向行内收款 Account",
+          "nullability": "有条件",
+          "sourceRefs": [
+            "表 1-4；BR-15/16/17"
+          ],
+          "designAdded": "双账户角色设计"
+        },
+        {
+          "name": "externalBankCode",
+          "type": "String",
+          "nullable": true,
+          "visibility": "private",
+          "constraints": "跨行必填；本行转账为空；只标识模拟外部银行",
+          "nullability": "有条件",
+          "sourceRefs": [
+            "UC-TR-04；BR-16/17"
+          ],
+          "designAdded": "模拟渠道字段设计"
+        },
+        {
+          "name": "externalPayeeRef",
+          "type": "String",
+          "nullable": true,
+          "visibility": "private",
+          "constraints": "跨行必填；本行转账为空；脱敏展示，不代表真实银行接入",
+          "nullability": "有条件",
+          "sourceRefs": [
+            "UC-TR-04；NFR-09"
+          ],
+          "designAdded": "外部收款标识设计"
+        },
+        {
+          "name": "amount",
+          "type": "Decimal",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "正数、最多两位小数；与关联交易一致",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-01/14/15"
+          ],
+          "designAdded": "字段名细化"
+        },
+        {
+          "name": "currency",
+          "type": "Currency",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "CNY；与关联交易一致",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-01"
+          ],
+          "designAdded": "枚举设计"
+        },
+        {
+          "name": "clearingStatus",
+          "type": "ClearingStatus",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "INTERNAL 为 NOT_APPLICABLE；EXTERNAL 为 SUBMITTED、UNKNOWN、CONFIRMED_SUCCESS、CONFIRMED_FAILURE 之一；外部成功不能单独推出交易成功",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-15/16/17；NFR-06"
+          ],
+          "designAdded": "区分外部和本地状态"
+        }
+      ],
+      "operations": [
+        {
+          "name": "snapshot",
+          "parameters": [],
+          "returns": "TransferSnapshot",
+          "visibility": "public",
+          "static": false,
+          "semantics": "See account-domain design specification and sequence diagram; omitted context parameters are carried in request/identity value objects.",
+          "contextParametersOmitted": true
+        }
+      ]
+    },
+    {
+      "name": "RiskRule",
+      "category": "entity",
+      "designStatus": "local-proposal-awaiting-C",
+      "sourceRefs": [
+        "实验一需求规格说明书.docx 表1-4"
+      ],
+      "attributes": [
+        {
+          "name": "ruleId",
+          "type": "String",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "规则标识；历史事件引用该规则及版本",
+          "nullability": "否",
+          "sourceRefs": [
+            "表 1-4 RiskRule"
+          ],
+          "designAdded": "字段名细化"
+        },
+        {
+          "name": "ruleType",
+          "type": "RuleType",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "当前建议 LIMIT_POLICY；不借此纳入候选名单/告警功能",
+          "nullability": "否",
+          "sourceRefs": [
+            "表 1-4；BR-05"
+          ],
+          "designAdded": "规则类别设计"
+        },
+        {
+          "name": "depositSingleLimit",
+          "type": "Decimal",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "正数、两位小数；课堂建议 50,000，可配置",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-05；NFR-12"
+          ],
+          "designAdded": "配置字段设计"
+        },
+        {
+          "name": "outgoingSingleLimit",
+          "type": "Decimal",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "取款和两类转账共用，课堂建议 10,000，可配置",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-05；NFR-12"
+          ],
+          "designAdded": "配置字段设计"
+        },
+        {
+          "name": "outgoingDailyLimit",
+          "type": "Decimal",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "每账户自然日累计；含成功和仍占用，失败恢复后释放原日额度；课堂建议 50,000，可配置",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-05；NFR-12"
+          ],
+          "designAdded": "配置字段设计"
+        },
+        {
+          "name": "enabled",
+          "type": "Boolean",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "生效标志；基本资金约束不能因该标志关闭而失效",
+          "nullability": "否",
+          "sourceRefs": [
+            "表 1-4；NFR-12"
+          ],
+          "designAdded": "规则配置设计"
+        },
+        {
+          "name": "ruleVersion",
+          "type": "Integer",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "正整数；金额校验和 RiskEvent 引用同一生效版本",
+          "nullability": "否",
+          "sourceRefs": [
+            "NFR-03/12"
+          ],
+          "designAdded": "规则版本设计"
+        }
+      ],
+      "operations": [
+        {
+          "name": "validateDepositAmount",
+          "parameters": [
+            {
+              "name": "amount",
+              "type": "Decimal"
+            },
+            {
+              "name": "currency",
+              "type": "Currency"
+            }
+          ],
+          "returns": "void",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Validate CNY/positive precision and independent configurable deposit single limit.",
+          "contextParametersOmitted": false
+        },
+        {
+          "name": "evaluateOutgoing",
+          "parameters": [],
+          "returns": "RiskDecision",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Check shared outgoing single/daily limits and personal stricter limits using original business-day and reserved totals; C proposal.",
+          "contextParametersOmitted": true
+        }
+      ]
+    },
+    {
+      "name": "RiskEvent",
+      "category": "entity",
+      "designStatus": "local-proposal-awaiting-C",
+      "sourceRefs": [
+        "实验一需求规格说明书.docx 表1-4"
+      ],
+      "attributes": [
+        {
+          "name": "eventId",
+          "type": "String",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "拦截事件唯一标识；不得当成资金流水",
+          "nullability": "否",
+          "sourceRefs": [
+            "表 1-4；BR-19"
+          ],
+          "designAdded": "事件标识设计"
+        },
+        {
+          "name": "tradeNo",
+          "type": "String",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "关联被拦截的合法金额交易；拒绝交易没有资金效果",
+          "nullability": "否",
+          "sourceRefs": [
+            "表 1-4；BR-19"
+          ],
+          "designAdded": "关联键设计"
+        },
+        {
+          "name": "ruleId",
+          "type": "String",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "命中规则标识",
+          "nullability": "否",
+          "sourceRefs": [
+            "表 1-4 RiskEvent"
+          ],
+          "designAdded": "关联键设计"
+        },
+        {
+          "name": "ruleVersion",
+          "type": "Integer",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "命中时的规则版本，不能只引用当前配置",
+          "nullability": "否",
+          "sourceRefs": [
+            "NFR-03"
+          ],
+          "designAdded": "审计版本设计"
+        },
+        {
+          "name": "operatorIdentityId",
+          "type": "String",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "触发身份；自动检查用系统身份，不冒充人工操作",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-20；NFR-10"
+          ],
+          "designAdded": "操作者设计"
+        },
+        {
+          "name": "occurredAt",
+          "type": "Instant",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "命中时间",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-20；NFR-10"
+          ],
+          "designAdded": "审计时间设计"
+        },
+        {
+          "name": "reasonCode",
+          "type": "String",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "可解释原因；日志不记录密码、完整令牌",
+          "nullability": "否",
+          "sourceRefs": [
+            "BR-19/20；NFR-03/09"
+          ],
+          "designAdded": "原因码设计"
+        },
+        {
+          "name": "result",
+          "type": "RiskDecision",
+          "nullable": false,
+          "visibility": "private",
+          "constraints": "PASS 或 REJECT；拦截事件当前使用 REJECT；不宣称已生成实际资金流水",
+          "nullability": "否",
+          "sourceRefs": [
+            "表 1-4；BR-19"
+          ],
+          "designAdded": "结果枚举设计"
+        }
+      ],
+      "operations": [
+        {
+          "name": "snapshot",
+          "parameters": [],
+          "returns": "RiskEventSnapshot",
+          "visibility": "public",
+          "static": false,
+          "semantics": "See account-domain design specification and sequence diagram; omitted context parameters are carried in request/identity value objects.",
+          "contextParametersOmitted": true
+        }
+      ]
+    },
+    {
+      "name": "DepositForm",
+      "category": "boundary",
+      "designStatus": "local-design",
+      "sourceRefs": [
+        "实验二账户域设计职责提议"
+      ],
+      "attributes": [],
+      "operations": [
+        {
+          "name": "submitDeposit",
+          "parameters": [],
+          "returns": "DepositRequest",
+          "visibility": "public",
+          "static": false,
+          "semantics": "See account-domain design specification and sequence diagram; omitted context parameters are carried in request/identity value objects.",
+          "contextParametersOmitted": true
+        }
+      ]
+    },
+    {
+      "name": "AccountQueryView",
+      "category": "boundary",
+      "designStatus": "local-design",
+      "sourceRefs": [
+        "实验二账户域设计职责提议"
+      ],
+      "attributes": [],
+      "operations": [
+        {
+          "name": "showBalance",
+          "parameters": [],
+          "returns": "void",
+          "visibility": "public",
+          "static": false,
+          "semantics": "See account-domain design specification and sequence diagram; omitted context parameters are carried in request/identity value objects.",
+          "contextParametersOmitted": true
+        }
+      ]
+    },
+    {
+      "name": "DepositController",
+      "category": "boundary",
+      "designStatus": "local-design",
+      "sourceRefs": [
+        "实验二账户域设计职责提议"
+      ],
+      "attributes": [],
+      "operations": [
+        {
+          "name": "deposit",
+          "parameters": [],
+          "returns": "DepositResult",
+          "visibility": "public",
+          "static": false,
+          "semantics": "See account-domain design specification and sequence diagram; omitted context parameters are carried in request/identity value objects.",
+          "contextParametersOmitted": true
+        }
+      ]
+    },
+    {
+      "name": "AccountQueryController",
+      "category": "boundary",
+      "designStatus": "local-design",
+      "sourceRefs": [
+        "实验二账户域设计职责提议"
+      ],
+      "attributes": [],
+      "operations": [
+        {
+          "name": "queryBalance",
+          "parameters": [],
+          "returns": "BalanceSnapshot",
+          "visibility": "public",
+          "static": false,
+          "semantics": "See account-domain design specification and sequence diagram; omitted context parameters are carried in request/identity value objects.",
+          "contextParametersOmitted": true
+        }
+      ]
+    },
+    {
+      "name": "ChannelGateway",
+      "category": "boundary",
+      "designStatus": "local-design",
+      "sourceRefs": [
+        "实验二账户域设计职责提议"
+      ],
+      "attributes": [],
+      "operations": [
+        {
+          "name": "requestDeposit",
+          "parameters": [
+            {
+              "name": "tradeNo",
+              "type": "String"
+            },
+            {
+              "name": "accountId",
+              "type": "String"
+            },
+            {
+              "name": "amount",
+              "type": "Decimal"
+            },
+            {
+              "name": "currency",
+              "type": "Currency"
+            }
+          ],
+          "returns": "ChannelResult",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Dispatch original tradeNo only after admission; timeout/unknown is not success.",
+          "contextParametersOmitted": false
+        },
+        {
+          "name": "queryResult",
+          "parameters": [
+            {
+              "name": "tradeNo",
+              "type": "String"
+            }
+          ],
+          "returns": "ChannelResult",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Reconcile the same accepted tradeNo; never create a replacement deposit.",
+          "contextParametersOmitted": false
+        },
+        {
+          "name": "verifyResult",
+          "parameters": [
+            {
+              "name": "transaction",
+              "type": "TransactionSnapshot"
+            },
+            {
+              "name": "result",
+              "type": "ChannelResult"
+            }
+          ],
+          "returns": "Boolean",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Validate trusted channel source and matching tradeNo/account/amount/currency against read-only snapshot passed by control layer; no entity-store access.",
+          "contextParametersOmitted": false
+        }
+      ]
+    },
+    {
+      "name": "AccessService",
+      "category": "control",
+      "designStatus": "local-design",
+      "sourceRefs": [
+        "实验二账户域设计职责提议"
+      ],
+      "attributes": [],
+      "operations": [
+        {
+          "name": "authenticate",
+          "parameters": [],
+          "returns": "Identity",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Resolve authenticated identity from session; missing or expired authentication ->401.",
+          "contextParametersOmitted": true
+        },
+        {
+          "name": "requireAccountAccess",
+          "parameters": [],
+          "returns": "void",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Check operation and object scope together: operation=DEPOSIT permits only ACT-C on own account; operation=READ_BALANCE permits own customer or staff with both role permission and explicit object-scope authorization. Read authorization never grants deposit permission; unauthorized->403; no foreign-data disclosure.",
+          "contextParametersOmitted": true
+        },
+        {
+          "name": "requireAcceptedTradeAccess",
+          "parameters": [],
+          "returns": "void",
+          "visibility": "public",
+          "static": false,
+          "semantics": "For customer/status queries authorize original trade; internal channel path validates trusted source and accepted transaction, never trusts client tradeNo alone.",
+          "contextParametersOmitted": true
+        }
+      ]
+    },
+    {
+      "name": "DepositService",
+      "category": "control",
+      "designStatus": "local-design",
+      "sourceRefs": [
+        "实验二账户域设计职责提议"
+      ],
+      "attributes": [],
+      "operations": [
+        {
+          "name": "deposit",
+          "parameters": [],
+          "returns": "DepositResult",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Orchestrate authenticated authorized admission/idempotency/validation/channel; malformed input refusal can use technical request record without invalid Decimal Transaction.",
+          "contextParametersOmitted": true
+        },
+        {
+          "name": "confirmDeposit",
+          "parameters": [
+            {
+              "name": "tradeNo",
+              "type": "String"
+            },
+            {
+              "name": "result",
+              "type": "ChannelResult"
+            }
+          ],
+          "returns": "DepositResult",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Verify source and original content; persist evidence, then request all-or-nothing posting or verified failure; accepted frozen accounts continue.",
+          "contextParametersOmitted": false
+        },
+        {
+          "name": "queryAcceptedDeposit",
+          "parameters": [
+            {
+              "name": "tradeNo",
+              "type": "String"
+            }
+          ],
+          "returns": "DepositResult",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Authorize original accepted trade, query same channel tradeNo and reuse confirmation; no new channel deposit.",
+          "contextParametersOmitted": false
+        }
+      ]
+    },
+    {
+      "name": "IdempotencyService",
+      "category": "control",
+      "designStatus": "local-design",
+      "sourceRefs": [
+        "实验二账户域设计职责提议"
+      ],
+      "attributes": [],
+      "operations": [
+        {
+          "name": "claimOrLoad",
+          "parameters": [
+            {
+              "name": "identityId",
+              "type": "String"
+            },
+            {
+              "name": "businessType",
+              "type": "BusinessType"
+            },
+            {
+              "name": "requestId",
+              "type": "String"
+            },
+            {
+              "name": "payloadHash",
+              "type": "String"
+            }
+          ],
+          "returns": "IdempotencyDecision",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Atomic durable claim scoped to identityId+businessType+requestId; normalized content same returns original status, different conflicts.",
+          "contextParametersOmitted": false
+        },
+        {
+          "name": "complete",
+          "parameters": [],
+          "returns": "void",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Store/rebuild current authorized processing result; Transaction stays the source of business state; does not create funds.",
+          "contextParametersOmitted": true
+        }
+      ]
+    },
+    {
+      "name": "AccountQueryService",
+      "category": "control",
+      "designStatus": "local-design",
+      "sourceRefs": [
+        "实验二账户域设计职责提议"
+      ],
+      "attributes": [],
+      "operations": [
+        {
+          "name": "queryBalance",
+          "parameters": [],
+          "returns": "BalanceSnapshot",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Read B/R/status/version from one consistent snapshot, call availableBalance(), return B/R/A; authorized frozen account can be queried.",
+          "contextParametersOmitted": true
+        }
+      ]
+    },
+    {
+      "name": "PostingService",
+      "category": "control",
+      "designStatus": "local-design",
+      "sourceRefs": [
+        "实验二账户域设计职责提议"
+      ],
+      "attributes": [],
+      "operations": [
+        {
+          "name": "completeDeposit",
+          "parameters": [
+            {
+              "name": "tradeNo",
+              "type": "String"
+            },
+            {
+              "name": "result",
+              "type": "ChannelResult"
+            }
+          ],
+          "returns": "PostingOutcome",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Serialize concurrent confirmations; Account credit+FundEntry append+Transaction success in one business commit; rollback all on failure, retain evidence for retry; terminal duplicate returns original outcome.",
+          "contextParametersOmitted": false
+        },
+        {
+          "name": "recordFailure",
+          "parameters": [
+            {
+              "name": "tradeNo",
+              "type": "String"
+            },
+            {
+              "name": "proof",
+              "type": "String"
+            }
+          ],
+          "returns": "PostingOutcome",
+          "visibility": "public",
+          "static": false,
+          "semantics": "Only verified definitive failure; conditionally write deposit failure without funds/entry; conflicting terminal proof requires reconciliation.",
+          "contextParametersOmitted": false
+        }
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "from": "Customer",
+      "fromMultiplicity": "1",
+      "to": "Account",
+      "toMultiplicity": "0..*",
+      "role": "owner/history",
+      "kind": "association",
+      "sourceRefs": [
+        "BR-02; 表1-4"
+      ]
+    },
+    {
+      "from": "Account",
+      "fromMultiplicity": "1",
+      "to": "Transaction",
+      "toMultiplicity": "0..*",
+      "role": "request primary account",
+      "kind": "association",
+      "sourceRefs": [
+        "表1-4"
+      ]
+    },
+    {
+      "from": "Account",
+      "fromMultiplicity": "1",
+      "to": "FundEntry",
+      "toMultiplicity": "0..*",
+      "role": "fund owner",
+      "kind": "association",
+      "sourceRefs": [
+        "表1-4 FundEntry"
+      ]
+    },
+    {
+      "from": "Transaction",
+      "fromMultiplicity": "1",
+      "to": "FundEntry",
+      "toMultiplicity": "0..*",
+      "role": "actual events",
+      "kind": "association",
+      "sourceRefs": [
+        "BR-19"
+      ]
+    },
+    {
+      "from": "Transaction",
+      "fromMultiplicity": "1",
+      "to": "TransferOrder",
+      "toMultiplicity": "0..1",
+      "role": "transfer details",
+      "kind": "association",
+      "sourceRefs": [
+        "表1-4; BR-15/16/17"
+      ]
+    },
+    {
+      "from": "Account",
+      "fromMultiplicity": "1",
+      "to": "TransferOrder",
+      "toMultiplicity": "0..*",
+      "role": "payer",
+      "kind": "association",
+      "sourceRefs": [
+        "BR-14/15"
+      ]
+    },
+    {
+      "from": "Account",
+      "fromMultiplicity": "0..1",
+      "to": "TransferOrder",
+      "toMultiplicity": "0..*",
+      "role": "payee/internal only",
+      "kind": "association",
+      "sourceRefs": [
+        "BR-15/16/17"
+      ]
+    },
+    {
+      "from": "Transaction",
+      "fromMultiplicity": "1",
+      "to": "RiskEvent",
+      "toMultiplicity": "0..*",
+      "role": "rule interception",
+      "kind": "association",
+      "sourceRefs": [
+        "表1-4; BR-19"
+      ]
+    },
+    {
+      "from": "RiskRule",
+      "fromMultiplicity": "1",
+      "to": "RiskEvent",
+      "toMultiplicity": "0..*",
+      "role": "matched rule and version",
+      "kind": "association",
+      "sourceRefs": [
+        "表1-4; NFR-03"
+      ]
+    },
+    {
+      "from": "DepositForm",
+      "to": "DepositController",
+      "kind": "dependency",
+      "sourceRefs": [
+        "账户域设计职责"
+      ]
+    },
+    {
+      "from": "AccountQueryView",
+      "to": "AccountQueryController",
+      "kind": "dependency",
+      "sourceRefs": [
+        "账户域设计职责"
+      ]
+    },
+    {
+      "from": "DepositController",
+      "to": "AccessService",
+      "kind": "dependency",
+      "sourceRefs": [
+        "账户域设计职责"
+      ]
+    },
+    {
+      "from": "DepositController",
+      "to": "DepositService",
+      "kind": "dependency",
+      "sourceRefs": [
+        "账户域设计职责"
+      ]
+    },
+    {
+      "from": "AccountQueryController",
+      "to": "AccessService",
+      "kind": "dependency",
+      "sourceRefs": [
+        "账户域设计职责"
+      ]
+    },
+    {
+      "from": "AccountQueryController",
+      "to": "AccountQueryService",
+      "kind": "dependency",
+      "sourceRefs": [
+        "账户域设计职责"
+      ]
+    },
+    {
+      "from": "DepositService",
+      "to": "AccessService",
+      "kind": "dependency",
+      "sourceRefs": [
+        "账户域设计职责"
+      ]
+    },
+    {
+      "from": "DepositService",
+      "to": "IdempotencyService",
+      "kind": "dependency",
+      "sourceRefs": [
+        "账户域设计职责"
+      ]
+    },
+    {
+      "from": "DepositService",
+      "to": "ChannelGateway",
+      "kind": "dependency",
+      "sourceRefs": [
+        "账户域设计职责"
+      ]
+    },
+    {
+      "from": "DepositService",
+      "to": "PostingService",
+      "kind": "dependency",
+      "sourceRefs": [
+        "账户域设计职责"
+      ]
+    },
+    {
+      "from": "DepositService",
+      "to": "Account",
+      "kind": "dependency",
+      "sourceRefs": [
+        "账户域设计职责"
+      ]
+    },
+    {
+      "from": "DepositService",
+      "to": "Transaction",
+      "kind": "dependency",
+      "sourceRefs": [
+        "账户域设计职责"
+      ]
+    },
+    {
+      "from": "DepositService",
+      "to": "RiskRule",
+      "kind": "dependency",
+      "sourceRefs": [
+        "账户域设计职责"
+      ]
+    },
+    {
+      "from": "PostingService",
+      "to": "Account",
+      "kind": "dependency",
+      "sourceRefs": [
+        "账户域设计职责"
+      ]
+    },
+    {
+      "from": "PostingService",
+      "to": "Transaction",
+      "kind": "dependency",
+      "sourceRefs": [
+        "账户域设计职责"
+      ]
+    },
+    {
+      "from": "PostingService",
+      "to": "FundEntry",
+      "kind": "dependency",
+      "sourceRefs": [
+        "账户域设计职责"
+      ]
+    },
+    {
+      "from": "AccountQueryService",
+      "to": "Account",
+      "kind": "dependency",
+      "sourceRefs": [
+        "账户域设计职责"
+      ]
+    },
+    {
+      "from": "IdempotencyService",
+      "to": "Transaction",
+      "kind": "dependency",
+      "sourceRefs": [
+        "账户域设计职责"
+      ]
+    }
+  ],
+  "invariants": [
+    {
+      "id": "INV-01",
+      "text": "A=B-R; B>=0; 0<=R<=B",
+      "sourceRefs": [
+        "BR-04"
+      ]
+    },
+    {
+      "id": "INV-02",
+      "text": "Per customer active(NORMAL or FROZEN) accounts<=3; historical count unbounded",
+      "sourceRefs": [
+        "BR-02"
+      ]
+    },
+    {
+      "id": "INV-03",
+      "text": "New deposit requires NORMAL at atomic admission; accepted trade continues after freeze",
+      "sourceRefs": [
+        "BR-03"
+      ]
+    },
+    {
+      "id": "INV-04",
+      "text": "Idempotency key(identityId,businessType,requestId); same normalized payload returns original state; different conflicts",
+      "sourceRefs": [
+        "BR-11/12"
+      ]
+    },
+    {
+      "id": "INV-05",
+      "text": "Only verified channel SUCCESS can trigger credit; unknown remains pending, confirmed failure has no funds/entry",
+      "sourceRefs": [
+        "BR-13"
+      ]
+    },
+    {
+      "id": "INV-06",
+      "text": "Credit+FundEntry+Transaction success commit all or none; concurrent/repeated confirmation once",
+      "sourceRefs": [
+        "BR-11/12",
+        "BR-13",
+        "NFR-02"
+      ]
+    },
+    {
+      "id": "INV-07",
+      "text": "FundEntry immutable, suggested unique(tradeNo,accountId,entryRole); entryId uniqueness alone is insufficient",
+      "sourceRefs": [
+        "BR-19",
+        "NFR-02"
+      ]
+    },
+    {
+      "id": "INV-08",
+      "text": "Authentication and object permission precede account, transaction and idempotency result reads",
+      "sourceRefs": [
+        "BR-20",
+        "NFR-01",
+        "NFR-07"
+      ]
+    },
+    {
+      "id": "INV-09",
+      "text": "UC-AC-07 close requires B=R=0 and no unsettled trade; unfreeze requires all active reasons cleared, risk-clearance evidence and operations authorization",
+      "sourceRefs": [
+        "UC-AC-07",
+        "BR-03",
+        "BR-09"
+      ]
+    },
+    {
+      "id": "INV-10",
+      "text": "Query uses one B/R/status snapshot; FROZEN permits authorized read-only query",
+      "sourceRefs": [
+        "UC-AC-04",
+        "BR-04",
+        "NFR-02"
+      ]
+    }
+  ],
+  "valueTypes": [
+    {
+      "name": "DepositRequest",
+      "fields": [
+        "requestId:String",
+        "accountId:String",
+        "amount:Decimal",
+        "currency:Currency"
+      ],
+      "notes": "identity is from authenticated context"
+    },
+    {
+      "name": "Identity",
+      "fields": [
+        "identityId:String",
+        "roles:Set<String>",
+        "objectScope:Scope"
+      ],
+      "notes": "logical value object; no password/token logging"
+    },
+    {
+      "name": "ChannelResult",
+      "fields": [
+        "tradeNo:String",
+        "accountId:String",
+        "amount:Decimal",
+        "currency:Currency",
+        "code:ChannelResultCode",
+        "evidenceId:String",
+        "source:TrustedChannelRef"
+      ],
+      "notes": "must be source/content verified"
+    },
+    {
+      "name": "BalanceSnapshot",
+      "fields": [
+        "accountId:String",
+        "currency:Currency",
+        "bookBalance:Decimal",
+        "reservedAmount:Decimal",
+        "availableBalance:Decimal",
+        "status:AccountStatus",
+        "version:Integer"
+      ],
+      "notes": "one consistent snapshot"
+    },
+    {
+      "name": "TransactionSnapshot",
+      "fields": [
+        "tradeNo:String",
+        "requestId:String",
+        "accountId:String",
+        "amount:Decimal",
+        "currency:Currency",
+        "acceptedAt:Instant?",
+        "status:TransactionStatus"
+      ],
+      "notes": "authorized immutable projection"
+    },
+    {
+      "name": "DepositResult",
+      "fields": [
+        "tradeNo:String?",
+        "requestId:String",
+        "accountId:String?",
+        "amount:Decimal?",
+        "currency:Currency?",
+        "status:TransactionStatus",
+        "reasonCode:String?"
+      ],
+      "notes": "invalid input rejection may have no business transaction number"
+    },
+    {
+      "name": "TransferSnapshot",
+      "fields": [
+        "transferId:String",
+        "tradeNo:String",
+        "clearingStatus:ClearingStatus"
+      ],
+      "notes": "C local collaboration proposal"
+    },
+    {
+      "name": "RiskEventSnapshot",
+      "fields": [
+        "eventId:String",
+        "tradeNo:String",
+        "reasonCode:String",
+        "occurredAt:Instant"
+      ],
+      "notes": "C local collaboration proposal"
+    }
+  ],
+  "enums": {
+    "Currency": [
+      "CNY"
+    ],
+    "RealNameStatus": [
+      "UNVERIFIED",
+      "VERIFIED",
+      "REJECTED"
+    ],
+    "AccountStatus": [
+      "NORMAL",
+      "FROZEN",
+      "CLOSED"
+    ],
+    "BusinessType": [
+      "DEPOSIT",
+      "WITHDRAWAL",
+      "INTERNAL_TRANSFER",
+      "EXTERNAL_TRANSFER"
+    ],
+    "TransactionStatus": [
+      "RECEIVED",
+      "REJECTED",
+      "PROCESSING",
+      "PENDING",
+      "SUCCEEDED",
+      "RECOVERING",
+      "FAILED"
+    ],
+    "ChannelResultCode": [
+      "SUCCESS",
+      "FAILURE",
+      "UNKNOWN"
+    ],
+    "EntryDirection": [
+      "CREDIT",
+      "DEBIT"
+    ],
+    "EntryRole": [
+      "DEPOSIT_IN",
+      "WITHDRAWAL_OUT",
+      "TRANSFER_OUT",
+      "TRANSFER_IN",
+      "CORRECTION_IN",
+      "CORRECTION_OUT"
+    ],
+    "TransferType": [
+      "INTERNAL",
+      "EXTERNAL"
+    ],
+    "ClearingStatus": [
+      "NOT_APPLICABLE",
+      "SUBMITTED",
+      "UNKNOWN",
+      "CONFIRMED_SUCCESS",
+      "CONFIRMED_FAILURE"
+    ],
+    "RuleType": [
+      "LIMIT_POLICY"
+    ],
+    "RiskDecision": [
+      "PASS",
+      "REJECT"
+    ],
+    "IdempotencyDecision": [
+      "NEW",
+      "EXISTING_SAME",
+      "CONFLICT"
+    ],
+    "PostingOutcome": [
+      "COMMITTED",
+      "ALREADY_APPLIED",
+      "RETRY_PENDING",
+      "CONFLICT"
+    ]
+  },
+  "technicalMappingNotes": [
+    "Do not map every boundary/control class to a table.",
+    "Malformed non-Decimal requests are refused in durable request/idempotency technical records, not as bogus valid transaction amounts.",
+    "Channel evidence must survive local posting rollback and keep original tradeNo for reconciliation.",
+    "Architecture remains A decision; remote partial writes cannot be called an atomic business commit.",
+    "Audit and freeze-reason technical/logical mapping to be agreed by A/D; not an extra claimed core entity."
+  ]
+}

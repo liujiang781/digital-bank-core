@@ -1,0 +1,61 @@
+@startuml account-query
+title 图 2-5 账户余额查询序列图（UC-AC-04）
+skinparam defaultFontName "Microsoft YaHei"
+skinparam defaultFontSize 15
+skinparam shadowing false
+skinparam backgroundColor white
+skinparam sequenceMessageAlign center
+skinparam maxMessageSize 220
+hide footbox
+autonumber
+
+actor "客户／授权后台人员" as QueryActor
+boundary "AccountQueryView" as View
+boundary "AccountQueryController" as Controller
+control "AccessService" as Access
+control "AccountQueryService" as Query
+entity "Account" as Account
+
+QueryActor -> View : 查看账户余额
+View -> Controller : queryBalance(accountId)
+Controller -> Access : authenticate()
+alt 未登录／会话失效
+  Access --> Controller : 401
+  Controller --> View : 提示登录；不读取余额
+else 身份有效
+  Access --> Controller : Identity／岗位及对象授权范围
+  Controller -> Access : requireAccountAccess(identity,accountId,READ_BALANCE)
+  Access -> Account : 读取归属与授权对象
+  alt 不属于本人／后台未授权
+    Access --> Controller : 403（不包含他人余额或详情）
+    Controller --> View : 无权访问
+  else 权限通过
+    Access --> Controller : 授权上下文
+    Controller -> Query : queryBalance(identity,accountId)
+    group 同一一致性快照中读取与计算
+      Query -> Account : 读取 B、R、币种、状态及版本
+      alt 授权范围内账户不存在
+        Account --> Query : NOT_FOUND
+        Query --> Controller : 404（统一错误提示）
+      else 账户存在
+        Account --> Query : 同一版本的 B、R、currency、status
+        Query -> Account : availableBalance()
+        Account --> Query : A = B - R
+        note over Query,Account
+        BR-04：B ≥ 0，0 ≤ R ≤ B，A ≥ 0。
+        availableBalance() 对同一份快照计算，不重新读另一版本。
+        冻结是交易准入限制，冻结账户仍可被授权查询。
+        end note
+        Query --> Controller : BalanceSnapshot(B,R,A,currency,status)
+      end
+    end
+    Controller --> View : showBalance(snapshot)／统一错误
+    View --> QueryActor : 分别标明账面／占用／可用
+  end
+end
+legend bottom
+BR-20／NFR-01：客户仅本人数据；后台还需具体对象范围。
+系统管理员角色本身不授予客户业务明细读取权。
+UC-AC-02/03 的列表与详情复用身份及对象权限骨架，本图细化余额查询。
+endlegend
+@enduml
