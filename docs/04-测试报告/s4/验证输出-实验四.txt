@@ -601,3 +601,103 @@ LOGIN UID-000001 -> code=SUCCEEDED token=dRK5R6Sqz7...
 
 
 
+
+
+========================================================================
+第 19 节  S3 新增接口联调验证（S4 执行，2026-11-19）
+========================================================================
+
+环境：MySQL 8.0.46 / 21 表 / 48 CHECK / 网关 8085 / 5 服务 health 5/5 PASS
+方式：全部经网关 8085 调用，脚本 run-s3-smoke.ps1（工作区，未入库）
+身份：OPS-ADMIN(OPERATIONS) / UID-000002(RISK, 提交人) / RISK-ADMIN(RISK, 审批人) / UID-000001(普通用户)
+
+------------------------------------------------------------------------
+19.1 登录与身份装配
+------------------------------------------------------------------------
+OPS-ADMIN   roles=OPERATIONS  scope=ACC_S2_001,ACC_S2_002
+UID-000002  roles=RISK        scope=ACC_S2_001,ACC_S2_002
+RISK-ADMIN  roles=RISK        scope=ACC_S2_001,ACC_S2_002
+UID-000001  roles=(空)        （普通用户不应有后管角色）
+
+结论：staff_authorization / staff_account_scope 经登录会话正确装配，
+      authorizationVersion 生效。
+
+------------------------------------------------------------------------
+19.2 逐项结果
+------------------------------------------------------------------------
+[PASS] GET  /api/v1/transactions?reason=...        运营视图 total=2（REJECTED 交易可见）
+[PASS] POST /api/v1/deposits  60001.00             422 SINGLE_LIMIT_EXCEEDED
+                                                   （RK-02 单笔 50000 拦截）
+[PASS] GET  /api/v1/risk/events?reason=...         total=3，ruleVersion=3，result=REJECT
+[PASS] POST /api/v1/risk/alerts/{id}/dispose       CONFIRMED 落库；
+                                                   同 requestId 重复提交返回同一条（幂等）
+[PASS] POST /api/v1/transactions/{no}/reconcile    conclusion=ALREADY_TERMINAL，
+                                                   status=REJECTED 未变；重复 requestId 幂等
+[PASS] PUT  /api/v1/risk/rules/RK-02               提交成功 CHG-RULE-FCC09C6ECC7245ED
+[PASS] POST /api/v1/risk/changes/{id}/approve      审批成功，rule_version 3 -> 4
+                                                   重复审批 409 REQUEST_CONFLICT
+                                                   "审批单已处理，不能重复审批"
+[PASS] POST /api/v1/risk/lists/changes (UPSERT)    提交成功，生成 PENDING 审批单
+[PASS] POST /api/v1/risk/changes/{id}/approve      名单写入成功
+[PASS] GET  /api/v1/risk/lists?listType=BLACKLIST  total=1，enabled=true
+
+------------------------------------------------------------------------
+19.3 本轮发现（2 项，均为 S3 代码与表结构/业务键不一致）
+------------------------------------------------------------------------
+DEF-S4-005  risk_list_entry 缺 approved_by 列（已修复）
+ 现象：名单审批与名单查询返回 500 INTERNAL_ERROR
+ 根因：RiskListService 的 SELECT/INSERT/UPDATE 均引用 approved_by，
+       而 schema.sql 的 risk_list_entry 无此列
+       （见 RiskListService.java 查询与 applyList 处）
+ 处置：ALTER TABLE risk_list_entry
+         ADD COLUMN approved_by VARCHAR(64) DEFAULT NULL AFTER created_by;
+       执行后 8/9 步转为 PASS。
+ 建议：由 S4 在 schema.sql 永久补该列（ListEntryView 本就有 approvedBy 字段）。
+
+DEF-S4-006  名单 REMOVE 静默失效（未修复，需 S3 改）
+ 现象：REMOVE 提交并审批后接口返回 code=SUCCEEDED，
+      但 GET /risk/lists 仍返回 total=1、enabled=true，条目未删除。
+ 证据：REMOVE 审批返回 version=0（库里查不到该 entry_id），
+       查询列表仍有 RLE-BLACKLIST-ACCOUNT-C69F2F3D3CFE。
+ 根因：每次提交都生成新的 entryId，applyList 的 REMOVE 分支
+       执行 DELETE ... WHERE entry_id = ?，用新 entryId 删不到旧行，
+       影响 0 行；但 risk_change_request 仍被置为 APPLIED。
+ 影响：名单无法通过审批流移除，黑名单会永久残留（ACC_S2_002 已被拦截）。
+ 建议：REMOVE 改为按业务唯一键定位
+       WHERE list_type=? AND subject_type=? AND subject_id=?，
+       并校验影响行数，为 0 时抛冲突而不是静默成功。
+
+DEF-S4-007（推断，未实测）  同一主体重复 UPSERT 会撞唯一键
+ 依据：risk_list_entry 有 UNIQUE KEY uk_list_subject(list_type,subject_type,subject_id)，
+       而 applyList 用 version==null 判断走 INSERT；由于 entryId 每次新生成，
+       已存在的条目必然查不到，重复 UPSERT 将撞 uk_list_subject（1062）。
+ 说明：本轮 UPSERT 能成功是因为此前该主体无条目；建议 S3 复现确认，
+       修法与 DEF-S4-006 相同（先按业务键查存在性）。
+
+------------------------------------------------------------------------
+19.4 展示层小瑕疵（不阻塞，仅记录）
+------------------------------------------------------------------------
+1) 告警处置首次返回 tradeNo=null，同 requestId 幂等重放时返回真实 tradeNo；
+   字段填充不一致。
+2) 名单审批返回的 submittedBy 被写成审批人（RISK-ADMIN），
+   与提交时返回的 submittedBy=UID-000002 不一致，展示字段有误。
+3) REMOVE 审批返回 version=0、createdAt=null，与"已生效"语义矛盾。
+
+------------------------------------------------------------------------
+19.5 本轮未覆盖
+------------------------------------------------------------------------
+人工核对的成功路径需要有 UNKNOWN 状态交易，只能在
+/internal/v1/channel 切换渠道模式下产生；网关对 /internal/** 一律 404
+（AuthenticationWebFilter），本轮仅验证了"已终结交易"的守卫路径。
+如需覆盖，需带内部令牌直连 transaction-service:8083，属联调扩展项。
+
+------------------------------------------------------------------------
+19.6 数据清理（执行后库内恢复干净）
+------------------------------------------------------------------------
+DELETE FROM risk_list_entry
+ WHERE list_type='BLACKLIST' AND subject_type='ACCOUNT'
+   AND subject_id='ACC_S2_002';
+
+注：RK-02 的 rule_version 因多次复验已累加至 4，限额值与 enabled 未变
+    （50000/10000/50000, enabled=1），verify.sql 断言不受影响。
+========================================================================
