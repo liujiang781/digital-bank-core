@@ -557,5 +557,47 @@ LOGIN UID-000001 -> code=SUCCEEDED token=dRK5R6Sqz7...
   deploy/scripts/verify-db.ps1 的 NOTE 已同步改为“3 个预期错误”。
   verify.sql 开头会把 ACC_S2_001 复位为 50000.00，因此本节的 50088.00 已被复位。
 
+================================================================================
+第 18 节  合并 main@e7d3df3（S3 增量，21 表）后复验
+时间：2026-11-19  基线：yys4@26369be（merge main@e7d3df3）
+原始输出：docs/04-测试报告/s4/verify-output-20261119-193559.txt
+================================================================================
+
+【背景】PR #42 合并（8c4bb5f）后 main 又前进两次：PR #43（亓壬）、PR #44（S3 运营交易、
+  回单与风控审批）。schema.sql 新增 5 张表：
+    risk_alert_disposal / risk_change_request / risk_change_approval /
+    risk_list_entry / trade_manual_action
+  已 git merge origin/main（无冲突，merge commit 26369be），并按新 schema 重建数据库。
+
+【结构复验】
+  mysql_version = 8.0.46
+  charset       = utf8mb4
+  collation     = utf8mb4_0900_ai_ci（@@collation_server 服务端默认值，非库默认排序规则）
+  table_count   = 21   （16 -> 21，新增 5 张）
+  fk_count      = 16   （S3 新表未加外键，数量不变）
+  check_count   = 48   （40 -> 48）
+
+【业务数据复验】
+  风控规则：RK-01 ACCOUNT_STATUS（限额为 NULL，enabled=1）
+            RK-02 LIMIT_POLICY 50000.00 / 10000.00 / 50000.00，enabled=1
+  余额不变式：ACC_S2_001 50000.00 available=50000.00 -> OK
+              ACC_S2_002 30000.00 available=30000.00 -> OK
+  口令哈希：OPS-ADMIN / UID-000001 / UID-000002 均 $2a$12$ BCrypt
+  login_lookup_rows = 1
+
+【预期错误（3 处，均符合预期）】
+  line 41  ERROR 1062 uk_transaction_request      （幂等键重复）
+  line 49  ERROR 3819 chk_transaction_amount      （-50.00 被 CHECK 拒绝）
+  line 86  ERROR 1062 uk_transaction_flow_role    （流水角色唯一键重复）
+
+【记账校验】50000.00 -> 50100.00，increased_by = 100.00，
+  flow_count = 1（VERIFY-DEPO-0001 / DEPOSIT_IN / CREDIT / 100.00）
+
+结论：合并 S3 增量后 21 表 / 16 外键 / 48 CHECK 与建表脚本完全一致，
+  余额不变式、演示账户、风控规则、幂等键约束、CHECK 约束全部复核通过。
+  注：S3 新增的 5 张表在 init-data.sql 中无种子数据（当前为空表），
+  如需演示数据需 S3 补充，不影响结构验收。
+
+
 
 
