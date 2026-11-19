@@ -1,0 +1,54 @@
+﻿=== verify-db 20261119-191542 ===
+mysql_version	charset	collation
+8.0.46	utf8mb4	utf8mb4_0900_ai_ci
+table_count
+16
+fk_count
+16
+check_count
+40
+rule_id	rule_type	deposit_single_limit	outgoing_single_limit	outgoing_daily_limit	enabled
+RK-01	ACCOUNT_STATUS	NULL	NULL	NULL	1
+RK-02	LIMIT_POLICY	50000.00	10000.00	50000.00	1
+account_id	book_balance	reserved_amount	available	check_result
+ACC_S2_001	50000.00	0.00	50000.00	OK
+ACC_S2_002	30000.00	0.00	30000.00	OK
+identity_id	username	hash_prefix	hash_algo
+OPS-ADMIN	admin	$2a$12$	BCrypt
+UID-000001	zhangsan	$2a$12$	BCrypt
+UID-000002	lisi	$2a$12$	BCrypt
+
+
+=== verify.sql (-f) ===
+NOTE: two Duplicate entry errors are EXPECTED (uk_transaction_request / uk_transaction_flow_role).
+account_id	book_balance	reserved_amount	available_balance	check_result
+ACC_S2_001	50000.00	0.00	50000.00	OK
+ACC_S2_002	30000.00	0.00	30000.00	OK
+table_count
+16
+fk_count
+16
+identity_id	username	hash_prefix	hash_algo
+OPS-ADMIN	admin	$2a$12$	BCrypt
+UID-000001	zhangsan	$2a$12$	BCrypt
+UID-000002	lisi	$2a$12$	BCrypt
+login_lookup_rows
+1
+mysql.exe : ERROR 1062 (23000) at line 41: Duplicate entry 'UID-000001-DEPOSIT-REQ-DEMO-0001' for key 'transaction.uk_transaction_request'
+所在位置 D:\1-软件工程实验\repo\deploy\scripts\verify-db.ps1:50 字符: 44
++ ... ySql -Raw | & $mysql -f -u root --default-character-set=utf8mb4 $Data ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (ERROR 1062 (230...action_request':String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+ERROR 3819 (HY000) at line 49: Check constraint 'chk_transaction_amount' is violated.
+ERROR 1062 (23000) at line 86: Duplicate entry 'VERIFY-DEPO-0001-ACC_S2_001-DEPOSIT_IN' for key 'transaction_flow.uk_transaction_flow_role'
+account_id	balance_before
+ACC_S2_001	50000.00
+account_id	balance_after	increased_by
+ACC_S2_001	50100.00	100.00
+trade_no	entry_role	direction	amount
+VERIFY-DEPO-0001	DEPOSIT_IN	CREDIT	100.00
+flow_count
+1
+

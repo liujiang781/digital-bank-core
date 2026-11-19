@@ -1,0 +1,20 @@
+﻿=== verify-db 20261119-191652 ===
+mysql.exe : ERROR 1045 (28000): Access denied for user 'root'@'localhost' (using password: NO)
+所在位置 D:\1-软件工程实验\repo\deploy\scripts\verify-db.ps1:43 字符: 10
++ $block = & $mysql -u root --default-character-set=utf8mb4 -e $checks  ...
++          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (ERROR 1045 (280...g password: NO):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+
+=== verify.sql (-f) ===
+NOTE: two Duplicate entry errors are EXPECTED (uk_transaction_request / uk_transaction_flow_role).
+mysql.exe : ERROR 1045 (28000): Access denied for user 'root'@'localhost' (using password: NO)
+所在位置 D:\1-软件工程实验\repo\deploy\scripts\verify-db.ps1:50 字符: 44
++ ... ySql -Raw | & $mysql -f -u root --default-character-set=utf8mb4 $Data ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (ERROR 1045 (280...g password: NO):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
