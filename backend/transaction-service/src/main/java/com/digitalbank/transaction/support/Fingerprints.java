@@ -32,6 +32,18 @@ public final class Fingerprints {
         }
     }
 
+    /** 人工操作幂等指纹：动作 + 交易号 + 原因，紧凑 JSON 固定顺序。 */
+    public static String actionHash(String action, String tradeNo, String reason) {
+        try {
+            String json = MAPPER.writeValueAsString(List.of(
+                    action, empty(tradeNo), reason == null ? "" : reason.trim()));
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(json.getBytes(StandardCharsets.UTF_8));
+            return HexFormat.of().formatHex(digest);
+        } catch (JsonProcessingException | NoSuchAlgorithmException e) {
+            throw new IllegalStateException("无法计算操作内容指纹", e);
+        }
+    }
+
     private static String empty(String value) {
         return value == null ? "" : value;
     }
