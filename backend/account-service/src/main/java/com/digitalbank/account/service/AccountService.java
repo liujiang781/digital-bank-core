@@ -25,11 +25,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
@@ -39,17 +39,13 @@ public class AccountService {
     private final JdbcTemplate jdbc;
     private final AccountAccess access;
     private final ObjectMapper json;
-    private final BigDecimal defaultSingleLimit;
-    private final BigDecimal defaultDailyLimit;
+    private final AccountPolicy policy;
 
-    public AccountService(JdbcTemplate jdbc, AccountAccess access, ObjectMapper json,
-            @Value("${account.outgoing-single-limit:10000.00}") BigDecimal defaultSingleLimit,
-            @Value("${account.outgoing-daily-limit:50000.00}") BigDecimal defaultDailyLimit) {
+    public AccountService(JdbcTemplate jdbc, AccountAccess access, ObjectMapper json, AccountPolicy policy) {
         this.jdbc = jdbc;
         this.access = access;
         this.json = json;
-        this.defaultSingleLimit = defaultSingleLimit;
-        this.defaultDailyLimit = defaultDailyLimit;
+        this.policy = policy;
     }
 
     @Transactional
@@ -173,9 +169,13 @@ public class AccountService {
                     if (!"FROZEN".equals(account.status())) {
                         throw error(ErrorCode.ACCOUNT_STATUS_INVALID, "仅冻结账户可以解冻");
                     }
-                    List<Long> active = activeRestrictions(accountId).stream().map(RestrictionView::restrictionId).sorted().toList();
+                    List<RestrictionView> restrictions = activeRestrictions(accountId);
+                    List<Long> active = restrictions.stream().map(RestrictionView::restrictionId).toList();
                     if (active.isEmpty() || !active.equals(resolved)) {
                         throw error(ErrorCode.ACCOUNT_STATUS_INVALID, "解除依据必须覆盖全部当前有效限制");
+                    }
+                    if (restrictions.stream().anyMatch(r -> "RISK".equals(r.source()) && !r.releaseApproved())) {
+                        throw error(ErrorCode.ACCOUNT_STATUS_INVALID, "仍有风控冻结原因缺少有效的解除结论");
                     }
                     jdbc.update("UPDATE account SET status = 'ACTIVE', version = version + 1 WHERE account_id = ?", accountId);
                     statusLog(actor, accountId, "FROZEN", "ACTIVE", reason);
@@ -185,7 +185,7 @@ public class AccountService {
                 });
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public LimitsResult limits(Actor actor, String accountId, LimitsRequest request, String requestId) {
         Account account = load(accountId, true);
         access.requireOwner(actor, account.customerId());
@@ -197,15 +197,14 @@ public class AccountService {
                     if ("CLOSED".equals(account.status())) {
                         throw error(ErrorCode.ACCOUNT_STATUS_INVALID, "已注销账户不能修改限额");
                     }
-                    List<Map<String, Object>> policies = jdbc.queryForList(
-                            "SELECT outgoing_single_limit, outgoing_daily_limit FROM risk_rule "
-                                    + "WHERE rule_type = 'LIMIT_POLICY' AND enabled = 1 ORDER BY rule_version DESC, id DESC LIMIT 1");
-                    BigDecimal systemSingle = policies.isEmpty() ? defaultSingleLimit
-                            : (BigDecimal) policies.getFirst().get("outgoing_single_limit");
-                    BigDecimal systemDaily = policies.isEmpty() ? defaultDailyLimit
-                            : (BigDecimal) policies.getFirst().get("outgoing_daily_limit");
-                    if (single.compareTo(systemSingle) > 0 || daily.compareTo(systemDaily) > 0) {
+                    var system = policy.limits();
+                    if (single.compareTo(system.single()) > 0 || daily.compareTo(system.daily()) > 0) {
                         throw error(ErrorCode.INVALID_ARGUMENT, "个人限额不得高于系统上限");
+                    }
+                    BigDecimal dailyUsed = policy.dailyUsed(accountId);
+                    if (daily.compareTo(dailyUsed) < 0) {
+                        throw error(ErrorCode.INVALID_ARGUMENT,
+                                "个人日限额不得低于当天已用额度 " + Money.format(dailyUsed));
                     }
                     jdbc.update("UPDATE account SET personal_single_limit = ?, personal_daily_limit = ?, "
                                     + "version = version + 1 WHERE account_id = ?", single, daily, accountId);
@@ -252,17 +251,33 @@ public class AccountService {
                         rs.getString("result"), offset(rs.getObject("created_at", LocalDateTime.class))), "created_at DESC, id DESC");
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Page<FundEntryView> fundEntries(Actor actor, String accountId, int page, int pageSize,
-            OffsetDateTime startTime, OffsetDateTime endTime) {
-        requireRead(actor, load(accountId, false));
+            OffsetDateTime startTime, OffsetDateTime endTime, String tradeNo, String reason) {
+        Account account = load(accountId, false);
+        boolean staff = isBackOffice(actor);
+        if (staff) {
+            access.requireOperator(actor, accountId, true);
+            reason = text(reason, "查询原因");
+        } else {
+            requireRead(actor, account);
+        }
         List<Object> args = new ArrayList<>(List.of(accountId));
         String filter = timeFilter("account_id = ?", args, startTime, endTime);
-        return queryPage("transaction_flow", filter, args, page, pageSize,
+        if (tradeNo != null) {
+            if (tradeNo.isBlank() || tradeNo.length() > 32) {
+                throw error(ErrorCode.INVALID_ARGUMENT, "交易号不合法");
+            }
+            filter += " AND trade_no = ?";
+            args.add(tradeNo);
+        }
+        Page<FundEntryView> entries = queryPage("transaction_flow", filter, args, page, pageSize,
                 (rs, n) -> new FundEntryView(rs.getString("entry_id"), rs.getString("trade_no"),
                         rs.getString("entry_role"), rs.getString("direction"), Money.format(rs.getBigDecimal("amount")),
                         Money.format(rs.getBigDecimal("book_balance_after")),
                         offset(rs.getObject("created_at", LocalDateTime.class))), "created_at DESC, id DESC");
+        if (staff) audit(actor, "FUND_ENTRIES_QUERY", accountId, reason, tradeNo);
+        return entries;
     }
 
     private Account load(String accountId, boolean lock) {
@@ -298,10 +313,15 @@ public class AccountService {
 
     private List<RestrictionView> activeRestrictions(String accountId) {
         // IDs, rather than DATETIME seconds, distinguish restrictions created in the same second.
-        return jdbc.query("SELECT id, change_reason FROM account_status_log WHERE account_id = ? "
-                        + "AND new_status = 'FROZEN' AND id > COALESCE((SELECT MAX(s.id) FROM account_status_log s "
-                        + "WHERE s.account_id = ? AND s.new_status = 'ACTIVE'), 0) ORDER BY id",
-                (rs, n) -> new RestrictionView(rs.getLong("id"), rs.getString("change_reason")), accountId, accountId);
+        return jdbc.query("SELECT f.id, f.change_reason, r.restriction_id AS approved_id FROM account_status_log f "
+                        + "LEFT JOIN risk_freeze_release r ON r.restriction_id = f.id WHERE f.account_id = ? "
+                        + "AND f.new_status = 'FROZEN' AND f.id > COALESCE((SELECT MAX(s.id) FROM account_status_log s "
+                        + "WHERE s.account_id = f.account_id AND s.new_status = 'ACTIVE'), 0) ORDER BY f.id",
+                (rs, n) -> {
+                    String reason = rs.getString("change_reason");
+                    String source = reason != null && reason.startsWith("RISK: ") ? "RISK" : "OPERATIONS";
+                    return new RestrictionView(rs.getLong("id"), reason, source, rs.getObject("approved_id") != null);
+                }, accountId);
     }
 
     private <T> T command(Actor actor, String type, String requestId, String requestHash,

@@ -13,6 +13,7 @@ DELETE FROM transaction_flow;
 DELETE FROM account_reservation;
 DELETE FROM `transaction`;
 DELETE FROM risk_rule;
+DELETE FROM risk_freeze_release;
 DELETE FROM account_status_log;
 DELETE FROM account;
 DELETE FROM credential;

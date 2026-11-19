@@ -104,10 +104,12 @@ class DepositApiTest {
     private void stubProcessingThen(String finalStatus) {
         when(account.acceptDeposit(any(), any(), any())).thenAnswer(invocation -> {
             Command command = invocation.getArgument(0);
+            jdbc.update("UPDATE `transaction` SET status = 'PROCESSING' WHERE trade_no = ?", command.tradeNo());
             return new Outcome(command.tradeNo(), "PROCESSING", "NONE", null);
         });
         when(account.depositResult(any(), any(), any())).thenAnswer(invocation -> {
             DepositResult receipt = invocation.getArgument(0);
+            jdbc.update("UPDATE `transaction` SET status = ? WHERE trade_no = ?", finalStatus, receipt.tradeNo());
             return new Outcome(receipt.tradeNo(), finalStatus, "NONE", receipt.reasonCode());
         });
         when(account.outcome(any(), any())).thenAnswer(invocation ->
@@ -251,6 +253,13 @@ class DepositApiTest {
         assertEquals(200, result.getResponse().getStatus());
         assertEquals("UNKNOWN", objectMapper.readTree(result.getResponse().getContentAsString())
                 .path("data").path("status").asText());
+        assertEquals("UNKNOWN", jdbc.queryForObject(
+                "SELECT result FROM mock_channel_deposit", String.class));
+        channel.setMode(MockChannelService.SUCCESS);
+        mockMvc.perform(get("/api/v1/transactions/{tradeNo}", tradeNo(result))
+                        .header("Authorization", "Bearer " + TOKEN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("UNKNOWN"));
         assertEquals("UNKNOWN", jdbc.queryForObject(
                 "SELECT result FROM mock_channel_deposit", String.class));
     }

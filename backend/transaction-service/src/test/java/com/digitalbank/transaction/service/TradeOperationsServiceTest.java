@@ -191,7 +191,7 @@ class TradeOperationsServiceTest {
 
     @Test
     void reconcileWithoutChannelExplainsByLocalFundsOutcome() {
-        seedTrade("TRD-R6", IN_SCOPE, "WITHDRAWAL", "UNKNOWN");
+        seedTrade("TRD-R6", IN_SCOPE, "INTERNAL_TRANSFER", "UNKNOWN");
         whenOutcome(invocation -> new Outcome(invocation.getArgument(0), "FAILED", "NONE", "LOCAL_DECLINED"));
 
         ManualActionResult result = service.reconcile(ops, "TRD-R6", body(REQUEST, REASON), TRACE);

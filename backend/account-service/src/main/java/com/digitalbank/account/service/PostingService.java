@@ -26,7 +26,8 @@ import org.springframework.transaction.annotation.Isolation;
 public class PostingService {
     private static final Set<String> TERMINAL = Set.of("SUCCESS", "FAILED", "REJECTED");
     private static final String EXTERNAL_TRANSFER = "EXTERNAL_TRANSFER";
-    private static final Set<String> LOCAL_OUTGOING = Set.of("WITHDRAWAL", "INTERNAL_TRANSFER");
+    private static final String WITHDRAWAL = "WITHDRAWAL";
+    private static final Set<String> LOCAL_OUTGOING = Set.of(WITHDRAWAL, "INTERNAL_TRANSFER");
     private static final BigDecimal MAX_MONEY = new BigDecimal("9999999999999999.99");
     private final JdbcTemplate jdbc;
     private final AccountPolicy policy;
@@ -142,14 +143,50 @@ public class PostingService {
 
     public Outcome completeWithdrawal(Command command) {
         Trade trade = trade(command.tradeNo(), true);
-        match(trade, "WITHDRAWAL", command.payerAccountId(), command.amount(), command.currency());
+        match(trade, WITHDRAWAL, command.payerAccountId(), command.amount(), command.currency());
         if (TERMINAL.contains(trade.status())) return result(trade);
-        Reservation reserved = requireReservation(trade);
-        Account payer = account(trade.accountId(), true);
-        debit(trade, payer, reserved);
-        flow(trade, payer.accountId(), "WITHDRAW_OUT", "DEBIT", payer.bookBalance().subtract(trade.amount()));
-        consumed(trade);
+        if (!"SUCCESS".equals(trade.channelResult())) throw conflicting("取款尚无已登记的成功回执");
+        return finishChannelOutgoing(trade, "WITHDRAW_OUT");
+    }
+
+    public Outcome recordWithdrawalResult(WithdrawalResult receipt) {
+        validateReceipt(receipt.tradeNo(), receipt.result(), receipt.channelRequestId(), receipt.evidenceId(),
+                receipt.observedAt(), receipt.reasonCode());
+        if ("SUCCESS".equals(receipt.result()) && receipt.reasonCode() != null) {
+            throw invalid("取款成功回执不能包含 reasonCode");
+        }
+        Trade trade = trade(receipt.tradeNo(), true);
+        match(trade, WITHDRAWAL, receipt.payerAccountId(), receipt.amount(), receipt.currency());
+        boolean unknown = "UNKNOWN".equals(receipt.result());
+        if (TERMINAL.contains(trade.status()) || "RECOVERING".equals(trade.status())
+                || "SUCCESS".equals(trade.channelResult()) || "FAILED".equals(trade.channelResult())) {
+            if (unknown || (receipt.result().equals(trade.channelResult())
+                    && Objects.equals(receipt.evidenceId(), trade.evidence())
+                    && Objects.equals(receipt.reasonCode(), trade.reason()))) {
+                return result(trade);
+            }
+            throw conflict(trade, "取款回执与已登记的明确结果不一致");
+        }
+        requireReservation(trade);
+        LocalDateTime observedAt = receipt.observedAt().toLocalDateTime();
+        if (unknown) {
+            jdbc.update("UPDATE `transaction` SET status = 'UNKNOWN', last_channel_result = 'UNKNOWN', "
+                            + "last_checked_at = ?, failure_reason = ?, version = version + 1 WHERE trade_no = ? "
+                            + "AND (last_checked_at IS NULL OR last_checked_at < ?)",
+                    observedAt, receipt.reasonCode(), trade.tradeNo(), observedAt);
+        } else {
+            jdbc.update("UPDATE `transaction` SET status = ?, last_channel_result = ?, last_checked_at = ?, "
+                            + "channel_evidence_id = ?, failure_reason = ?, version = version + 1 WHERE trade_no = ?",
+                    "FAILED".equals(receipt.result()) ? "RECOVERING" : trade.status(), receipt.result(),
+                    observedAt, receipt.evidenceId(), receipt.reasonCode(), trade.tradeNo());
+        }
         return fresh(trade.tradeNo());
+    }
+
+    public Outcome finishWithdrawal(String tradeNo) {
+        Trade trade = trade(tradeNo, true);
+        if (!WITHDRAWAL.equals(trade.type())) throw conflicting("原单不是取款");
+        return finishChannelOutgoing(trade, "WITHDRAW_OUT");
     }
 
     public Outcome postInternalTransfer(Command command) {
@@ -214,15 +251,19 @@ public class PostingService {
     public Outcome finishExternalTransfer(String tradeNo) {
         Trade trade = trade(tradeNo, true);
         if (!EXTERNAL_TRANSFER.equals(trade.type())) throw conflicting("原单不是跨行转账");
+        return finishChannelOutgoing(trade, "TRANSFER_OUT");
+    }
+
+    private Outcome finishChannelOutgoing(Trade trade, String flowRole) {
         if (TERMINAL.contains(trade.status())) return result(trade);
         if (trade.acceptedAt() == null || trade.evidence() == null) {
-            throw conflicting("跨行转账尚无已登记的明确结果");
+            throw conflicting("出账尚无已登记的明确渠道结果");
         }
         if ("SUCCESS".equals(trade.channelResult())) {
             Reservation reserved = requireReservation(trade);
             Account payer = account(trade.accountId(), true);
             debit(trade, payer, reserved);
-            flow(trade, payer.accountId(), "TRANSFER_OUT", "DEBIT", payer.bookBalance().subtract(trade.amount()));
+            flow(trade, payer.accountId(), flowRole, "DEBIT", payer.bookBalance().subtract(trade.amount()));
             consumed(trade);
         } else if ("FAILED".equals(trade.channelResult()) && "RECOVERING".equals(trade.status())) {
             releaseReservation(trade, requireActiveReservation(trade));
@@ -230,7 +271,7 @@ public class PostingService {
                     + "version = version + 1 WHERE trade_no = ?", trade.tradeNo());
             audit(trade, "POSTING_FAILURE", trade.reason());
         } else {
-            throw conflicting("跨行转账尚无已登记的明确结果");
+            throw conflicting("出账尚无已登记的明确渠道结果");
         }
         return fresh(trade.tradeNo());
     }
@@ -307,6 +348,11 @@ public class PostingService {
             if (trade.status().equals(command.decision()) && Objects.equals(trade.reason(), command.reasonCode())
                     && Objects.equals(trade.evidence(), command.evidenceId())) return result(trade);
             throw conflict(trade, "失败或拒绝命令与既有终态不一致");
+        }
+        // Before the channel rollout, some withdrawals already entered local recovery with recorded evidence.
+        if (!rejection && WITHDRAWAL.equals(trade.type()) && (!"RECOVERING".equals(trade.status())
+                || trade.evidence() == null || "FAILED".equals(trade.channelResult()))) {
+            throw conflicting("取款失败必须使用 withdrawal-results 提交明确渠道回执");
         }
         if ("RECOVERING".equals(trade.status()) && (!Objects.equals(trade.reason(), command.reasonCode())
                 || !Objects.equals(trade.evidence(), command.evidenceId()))) {

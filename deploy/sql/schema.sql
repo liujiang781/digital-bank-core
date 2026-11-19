@@ -20,6 +20,7 @@ DROP TABLE IF EXISTS risk_rule;
 DROP TABLE IF EXISTS transfer_order;
 DROP TABLE IF EXISTS transaction_flow;
 DROP TABLE IF EXISTS `transaction`;
+DROP TABLE IF EXISTS risk_freeze_release;
 DROP TABLE IF EXISTS account_status_log;
 DROP TABLE IF EXISTS account;
 DROP TABLE IF EXISTS credential;
@@ -106,6 +107,14 @@ CREATE TABLE account_status_log (
     CONSTRAINT chk_account_status_log_new CHECK (new_status IN ('ACTIVE', 'FROZEN', 'CLOSED')),
     CONSTRAINT chk_account_status_log_prev CHECK (previous_status IS NULL OR previous_status IN ('ACTIVE', 'FROZEN', 'CLOSED'))
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='账户状态变更记录表';
+
+CREATE TABLE IF NOT EXISTS risk_freeze_release (
+    restriction_id BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+    approved_by VARCHAR(64) NOT NULL,
+    basis VARCHAR(200) NOT NULL,
+    approved_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_risk_freeze_release_restriction FOREIGN KEY (restriction_id) REFERENCES account_status_log(id)
+);
 
 CREATE TABLE `transaction` (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
