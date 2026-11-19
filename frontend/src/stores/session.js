@@ -16,7 +16,18 @@ export const useSessionStore = defineStore('session', {
     roles: (state) => state.customer?.roles || [],
     isOperations: (state) => (state.customer?.roles || []).includes('OPERATIONS'),
     isRisk: (state) => (state.customer?.roles || []).includes('RISK'),
-    isAdmin: (state) => (state.customer?.roles || []).includes('ADMIN')
+    isAdmin: (state) => (state.customer?.roles || []).includes('ADMIN'),
+    // 风控读权限：RISK / OPERATIONS / AUDIT（与后端 RiskAccess.requireRiskReader/requireRuleReader 一致）
+    canReadRisk: (state) => {
+      const roles = state.customer?.roles || []
+      return !roles.includes('ADMIN') &&
+        ['RISK', 'OPERATIONS', 'AUDIT'].some((r) => roles.includes(r))
+    },
+    // 风控写权限：仅 RISK，且需非空账户范围（与后端 requireRiskWriter 一致）
+    canWriteRisk: (state) => {
+      const roles = state.customer?.roles || []
+      return roles.includes('RISK') && (state.customer?.accountScope || []).length > 0
+    }
   },
   actions: {
     loginSuccess({ token, customer }) {

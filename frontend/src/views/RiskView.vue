@@ -8,7 +8,9 @@ import {
   listRiskEntries, submitListChange, disposeAlert, listRiskEvents
 } from '../api/ops'
 import { newRequestId } from '../utils/requestId'
+import { useSessionStore } from '../stores/session'
 
+const session = useSessionStore()
 const tab = ref('rules')
 
 // 规则
@@ -203,7 +205,8 @@ onMounted(() => { loadRules(); loadChanges() })
             <el-table-column prop="ruleVersion" label="版本" width="80" />
             <el-table-column label="操作" width="100" fixed="right">
               <template #default="{ row }">
-                <el-button link type="primary" @click="openRule(row)">变更</el-button>
+                <el-button v-if="session.canWriteRisk" link type="primary" @click="openRule(row)">变更</el-button>
+                <span v-else>—</span>
               </template>
             </el-table-column>
           </el-table>
@@ -220,7 +223,7 @@ onMounted(() => { loadRules(); loadChanges() })
             <el-table-column prop="createdAt" label="提交时间" min-width="170" />
             <el-table-column label="操作" width="160" fixed="right">
               <template #default="{ row }">
-                <template v-if="row.status === 'PENDING' || row.status === 'SUBMITTED'">
+                <template v-if="session.canWriteRisk && (row.status === 'PENDING' || row.status === 'SUBMITTED')">
                   <el-button link type="success" @click="approve(row, 'APPROVE')">通过</el-button>
                   <el-button link type="danger" @click="approve(row, 'REJECT')">拒绝</el-button>
                 </template>
@@ -233,7 +236,8 @@ onMounted(() => { loadRules(); loadChanges() })
         <!-- 风险名单 -->
         <el-tab-pane label="风险名单" name="lists">
           <div class="filters">
-            <el-button type="primary" @click="listDialog = true">新增名单变更</el-button>
+            <el-button v-if="session.canWriteRisk" type="primary" @click="listDialog = true">新增名单变更</el-button>
+            <span v-else class="readonly-hint">当前账号为只读权限，可查看名单但不能变更</span>
           </div>
           <el-table :data="entries" v-loading="entriesLoading" stripe>
             <el-table-column prop="entryId" label="条目编号" min-width="140" />
@@ -268,7 +272,7 @@ onMounted(() => { loadRules(); loadChanges() })
             <el-table-column prop="occurredAt" label="时间" min-width="170" />
             <el-table-column label="操作" width="100" fixed="right">
               <template #default="{ row }">
-                <el-button v-if="row.result === 'REJECT'" link type="primary" @click="dispose(row)">处置</el-button>
+                <el-button v-if="session.canWriteRisk && row.result === 'REJECT'" link type="primary" @click="dispose(row)">处置</el-button>
               </template>
             </el-table-column>
           </el-table>
@@ -345,5 +349,10 @@ onMounted(() => { loadRules(); loadChanges() })
   display: flex;
   gap: 12px;
   margin-bottom: 12px;
+  align-items: center;
+}
+.readonly-hint {
+  font-size: 12px;
+  color: var(--text-muted);
 }
 </style>

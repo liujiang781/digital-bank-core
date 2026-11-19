@@ -27,7 +27,7 @@ const routes = [
       { path: 'transactions', name: 'transactions', component: () => import('../views/TransactionsView.vue') },
       { path: 'profile', name: 'profile', component: () => import('../views/ProfileView.vue') },
       { path: 'ops', name: 'ops', component: () => import('../views/OpsView.vue'), meta: { role: 'OPERATIONS' } },
-      { path: 'risk', name: 'risk', component: () => import('../views/RiskView.vue'), meta: { role: 'RISK' } }
+      { path: 'risk', name: 'risk', component: () => import('../views/RiskView.vue'), meta: { riskRead: true } }
     ]
   },
   { path: '/:pathMatch(.*)*', redirect: '/accounts' }
@@ -49,6 +49,9 @@ router.beforeEach((to) => {
   }
   // 后台页面按角色拦截。前端拦截只是体验优化，真正权限由服务端接口校验。
   if (to.meta.role && !session.roles.includes(to.meta.role)) {
+    return { name: 'accounts' }
+  }
+  if (to.meta.riskRead && !session.canReadRisk) {
     return { name: 'accounts' }
   }
 })
