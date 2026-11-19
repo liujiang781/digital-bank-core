@@ -11,18 +11,12 @@ export const useSessionStore = defineStore('session', {
   getters: {
     isLoggedIn: (state) => Boolean(state.token),
     displayName: (state) => state.customer?.realName || state.customer?.identityId || '客户',
-    // 管理角色：OPERATIONS 可见运营台，RISK 可见风控台。
     // 角色来自服务端登录响应，前端只做展示控制，真正的权限校验仍在服务端。
     roles: (state) => state.customer?.roles || [],
-    isOperations: (state) => (state.customer?.roles || []).includes('OPERATIONS'),
-    isRisk: (state) => (state.customer?.roles || []).includes('RISK'),
-    isAdmin: (state) => (state.customer?.roles || []).includes('ADMIN'),
-    // 风控读权限：RISK / OPERATIONS / AUDIT（与后端 RiskAccess.requireRiskReader/requireRuleReader 一致）
-    canReadRisk: (state) => {
-      const roles = state.customer?.roles || []
-      return !roles.includes('ADMIN') &&
-        ['RISK', 'OPERATIONS', 'AUDIT'].some((r) => roles.includes(r))
-    },
+    // 后台模块按演示账号精确隔离：
+    // 运营管理只给 OPS-ADMIN，风险控制只给 OPS-RISK。
+    isOpsAdmin: (state) => state.customer?.identityId === 'OPS-ADMIN',
+    isOpsRisk: (state) => state.customer?.identityId === 'OPS-RISK',
     // 风控写权限：仅 RISK，且需非空账户范围（与后端 requireRiskWriter 一致）
     canWriteRisk: (state) => {
       const roles = state.customer?.roles || []

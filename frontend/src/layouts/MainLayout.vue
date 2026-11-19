@@ -58,12 +58,12 @@ async function handleLogout() {
           </el-menu-item>
 
           <!-- 后台入口只给有对应角色的账号显示；服务端仍会独立校验权限 -->
-          <template v-if="session.isOperations || session.canReadRisk">
+          <template v-if="session.isOpsAdmin || session.isOpsRisk">
             <div class="aside-label aside-label-second">后台管理</div>
-            <el-menu-item v-if="session.isOperations" index="/ops">
+            <el-menu-item v-if="session.isOpsAdmin" index="/ops">
               <el-icon><OfficeBuilding /></el-icon><span>运营管理</span>
             </el-menu-item>
-            <el-menu-item v-if="session.canReadRisk" index="/risk">
+            <el-menu-item v-if="session.isOpsRisk" index="/risk">
               <el-icon><Lock /></el-icon><span>风险控制</span>
             </el-menu-item>
           </template>
