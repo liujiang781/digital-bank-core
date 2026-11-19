@@ -1,0 +1,7 @@
+﻿[PASS] gateway          200 {"status":"UP"}
+[PASS] user-service     200 {"code":"SUCCEEDED","message":"请求成功","data":{"status":"UP","service":"user-service"},"traceId":"c0c15b36-4a71-409a-9e89-ef9f05cbe136"}
+[PASS] account-service  200 {"code":"SUCCEEDED","message":"请求成功","data":{"status":"UP","service":"account-service"},"traceId":"b11c5d7a-0183-47c3-b974-d78fe3610179"}
+[PASS] transaction-svc  200 {"code":"SUCCEEDED","message":"请求成功","data":{"service":"transaction-service","status":"UP"},"traceId":"18ac268e-f73c-4f60-9774-b7a18fea6802"}
+[PASS] risk-service     200 {"code":"SUCCEEDED","message":"请求成功","data":{"status":"UP","service":"risk-service"},"traceId":"d3a96b96-b1eb-48fc-bf73-fb50b805f431"}
+
+All targets UP (health only, not business acceptance).

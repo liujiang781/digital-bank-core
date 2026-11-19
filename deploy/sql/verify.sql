@@ -1,8 +1,7 @@
 SET NAMES utf8mb4;
 USE payment_db;
 
--- 清理上次验证残留 (幂等键测试会故意触发 Duplicate, 可能中断后续清理)
--- 按外键依赖逆序删: 先删所有引用 transaction 的子表, 最后删 transaction
+-- 清理上次验证残留
 DELETE FROM mock_channel_deposit WHERE trade_no LIKE 'VERIFY-%';
 DELETE FROM account_reservation WHERE trade_no LIKE 'VERIFY-%';
 DELETE FROM transaction_flow WHERE trade_no LIKE 'VERIFY-%';
@@ -19,6 +18,19 @@ WHERE table_schema = 'payment_db';
 
 SELECT COUNT(*) AS fk_count FROM information_schema.referential_constraints
 WHERE constraint_schema = 'payment_db';
+
+SELECT c.identity_id, cr.username, LEFT(cr.password_hash, 7) AS hash_prefix,
+  CASE WHEN cr.password_hash LIKE '$2a$%' OR cr.password_hash LIKE '$2b$%'
+       THEN 'BCrypt' ELSE 'NOT-BCrypt' END AS hash_algo
+FROM customer c
+JOIN credential cr ON cr.customer_id = c.customer_id
+WHERE cr.credential_type = 'USERNAME'
+ORDER BY c.identity_id;
+
+SELECT COUNT(*) AS login_lookup_rows
+FROM customer c
+JOIN credential cr ON cr.customer_id = c.customer_id
+WHERE c.identity_id = 'UID-000001' AND cr.credential_type = 'USERNAME';
 
 INSERT INTO `transaction` (trade_no, identity_id, business_type, request_id, request_hash,
   account_id, amount, currency, status, accepted_at)
@@ -42,11 +54,7 @@ VALUES ('VERIFY-DEMO-0003', 'UID-000001', 'DEPOSIT', 'REQ-DEMO-NEG',
 
 DELETE FROM `transaction` WHERE trade_no LIKE 'VERIFY-DEMO-%';
 
--- ============================================================
 -- 验收标准 3: 一次成功存款只增加一次余额、只生成对应流水
--- 模拟 S2 记账: 插交易原单 -> 插一条 DEPOSIT_IN 流水 -> 账户余额 +100
--- 然后证明: 余额恰好 +100 且该 trade_no 的流水只有 1 条
--- ============================================================
 SELECT account_id, book_balance AS balance_before
 FROM account WHERE account_id = 'ACC_S2_001';
 
@@ -74,7 +82,7 @@ FROM transaction_flow WHERE trade_no = 'VERIFY-DEPO-0001';
 SELECT COUNT(*) AS flow_count
 FROM transaction_flow WHERE trade_no = 'VERIFY-DEPO-0001';
 
--- 重复插入同一条流水应被 uk_transaction_flow_role 拒绝 (证明不会重复记流水)
+-- 重复插入同一条流水应被 uk_transaction_flow_role 拒绝
 INSERT INTO transaction_flow (entry_id, trade_no, account_id, entry_role, direction,
   amount, book_balance_after)
 VALUES ('FLOW-VERIFY-0002', 'VERIFY-DEPO-0001', 'ACC_S2_001', 'DEPOSIT_IN', 'CREDIT',
