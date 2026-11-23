@@ -150,19 +150,35 @@ public class AccountService {
     }
 
     @Transactional(readOnly = true)
-    public AccountView get(Actor actor, String accountId) {
+    public AccountView get(Actor actor, String accountId, String reason) {
         Account account = load(accountId, false);
-        requireRead(actor, account);
-        return view(account);
+        boolean staff = isBackOffice(actor);
+        if (staff) {
+            access.requireOperator(actor, accountId, true);
+            reason = text(reason, "查询原因");
+        } else {
+            requireRead(actor, account);
+        }
+        AccountView result = view(account);
+        if (staff) audit(actor, "ACCOUNT_GET_QUERY", accountId, reason, null);
+        return result;
     }
 
     @Transactional(readOnly = true)
-    public BalanceView balance(Actor actor, String accountId) {
+    public BalanceView balance(Actor actor, String accountId, String reason) {
         Account account = load(accountId, false);
-        requireRead(actor, account);
-        return new BalanceView(account.accountId(), account.currency(), account.status(),
+        boolean staff = isBackOffice(actor);
+        if (staff) {
+            access.requireOperator(actor, accountId, true);
+            reason = text(reason, "查询原因");
+        } else {
+            requireRead(actor, account);
+        }
+        BalanceView result = new BalanceView(account.accountId(), account.currency(), account.status(),
                 Money.format(account.bookBalance()), Money.format(account.reservedAmount()),
                 Money.format(account.availableBalance()));
+        if (staff) audit(actor, "ACCOUNT_BALANCE_QUERY", accountId, reason, null);
+        return result;
     }
 
     @Transactional
@@ -273,13 +289,22 @@ public class AccountService {
 
     @Transactional(readOnly = true)
     public Page<OperationView> operations(Actor actor, String accountId, int page, int pageSize,
-            OffsetDateTime startTime, OffsetDateTime endTime) {
-        requireRead(actor, load(accountId, false));
+            OffsetDateTime startTime, OffsetDateTime endTime, String reason) {
+        Account account = load(accountId, false);
+        boolean staff = isBackOffice(actor);
+        if (staff) {
+            access.requireOperator(actor, accountId, true);
+            reason = text(reason, "查询原因");
+        } else {
+            requireRead(actor, account);
+        }
         List<Object> args = new ArrayList<>(List.of(accountId));
         String filter = timeFilter("target_type = 'account' AND target_ref = ?", args, startTime, endTime);
-        return queryPage("audit_log", filter, args, page, pageSize,
+        Page<OperationView> result = queryPage("audit_log", filter, args, page, pageSize,
                 (rs, n) -> new OperationView(rs.getLong("id"), rs.getString("action"), rs.getString("reason"),
                         rs.getString("result"), offset(rs.getObject("created_at", LocalDateTime.class))), "created_at DESC, id DESC");
+        if (staff) audit(actor, "ACCOUNT_OPERATIONS_QUERY", accountId, reason, null);
+        return result;
     }
 
     @Transactional
