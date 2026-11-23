@@ -1,0 +1,744 @@
+{
+  "执行时间": "2026-11-23T08:53:42+08:00",
+  "网关": "见每条请求 path，令牌与密码已脱敏",
+  "记录人": "S5",
+  "说明": "本文件由 s5_e2e.py 自动生成；结果为脚本按期望输出自动判定，需人工复核。",
+  "用例": [
+    {
+      "编号": "E2E-S5-001",
+      "功能名称": "经网关登录",
+      "请求": {
+        "method": "POST",
+        "path": "/api/v1/auth/login",
+        "body": {
+          "identityId": "UID-000001",
+          "password": "***"
+        }
+      },
+      "期望输出": "HTTP 200，code=SUCCEEDED，data.token 非空",
+      "实际输出": {
+        "httpStatus": 200,
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "token": "<已脱敏>",
+          "tokenType": "Bearer",
+          "expiresAt": "2026-11-23T01:23:40.574861100Z",
+          "customer": {
+            "customerId": "CUS-0001",
+            "identityId": "UID-000001",
+            "roles": [],
+            "accountScope": [],
+            "authorizationVersion": 0
+          }
+        },
+        "诊断": ""
+      },
+      "发现问题": "",
+      "结果": "通过",
+      "时间": "2026-11-23T08:53:40+08:00",
+      "测试人": "S5",
+      "traceId": "881a544c-4279-4360-a5d8-4986517ee6ef"
+    },
+    {
+      "编号": "E2E-S5-001a",
+      "功能名称": "存款前余额",
+      "请求": {
+        "method": "GET",
+        "path": "/api/v1/accounts/ACC-0001/balance",
+        "body": null
+      },
+      "期望输出": "HTTP 200，返回 B/R/A 快照",
+      "实际输出": {
+        "httpStatus": 200,
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "accountId": "ACC-0001",
+          "currency": "CNY",
+          "status": "ACTIVE",
+          "bookBalance": "49829.00",
+          "reservedAmount": "0.00",
+          "availableBalance": "49829.00"
+        },
+        "诊断": ""
+      },
+      "发现问题": "",
+      "结果": "通过",
+      "时间": "2026-11-23T08:53:40+08:00",
+      "测试人": "S5",
+      "traceId": "1ecd39fd-4160-4098-9cff-0381126a2178"
+    },
+    {
+      "编号": "E2E-S5-001b",
+      "功能名称": "成功存款",
+      "请求": {
+        "method": "POST",
+        "path": "/api/v1/deposits",
+        "body": {
+          "accountId": "ACC-0001",
+          "amount": "100.00",
+          "currency": "CNY",
+          "requestId": "de8177f4-db7b-44e1-87c7-78d91a5ba703"
+        }
+      },
+      "期望输出": "SUCCEEDED/SUCCESS",
+      "实际输出": {
+        "httpStatus": 200,
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "tradeNo": "TRD202611239B64DB50",
+          "status": "SUCCESS",
+          "reasonCode": null
+        },
+        "诊断": ""
+      },
+      "发现问题": "",
+      "结果": "通过",
+      "时间": "2026-11-23T08:53:40+08:00",
+      "测试人": "S5",
+      "traceId": "2aba5b0e-11ba-4c8c-81b2-09250be7594a",
+      "关联信息": {
+        "requestId": "de8177f4-db7b-44e1-87c7-78d91a5ba703"
+      }
+    },
+    {
+      "编号": "E2E-S5-001c",
+      "功能名称": "查询交易结果",
+      "请求": {
+        "method": "GET",
+        "path": "/api/v1/transactions/TRD202611239B64DB50?reason=%E5%AE%9E%E9%AA%8C%E5%9B%9BS5%E8%81%94%E8%B0%83",
+        "body": null
+      },
+      "期望输出": "HTTP 200；data.status 为业务终态",
+      "实际输出": {
+        "httpStatus": 200,
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "tradeNo": "TRD202611239B64DB50",
+          "businessType": "DEPOSIT",
+          "status": "SUCCESS",
+          "amount": "100.00",
+          "failureReason": null,
+          "accountId": "ACC-0001"
+        },
+        "诊断": ""
+      },
+      "发现问题": "",
+      "结果": "通过",
+      "时间": "2026-11-23T08:53:40+08:00",
+      "测试人": "S5",
+      "traceId": "4aff3e74-d9ee-4ea6-98a4-860d574de6a8",
+      "关联信息": {
+        "tradeNo": "TRD202611239B64DB50"
+      }
+    },
+    {
+      "编号": "E2E-S5-001d",
+      "功能名称": "存款后余额",
+      "请求": {
+        "method": "GET",
+        "path": "/api/v1/accounts/ACC-0001/balance",
+        "body": null
+      },
+      "期望输出": "HTTP 200，返回 B/R/A 快照",
+      "实际输出": {
+        "httpStatus": 200,
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "accountId": "ACC-0001",
+          "currency": "CNY",
+          "status": "ACTIVE",
+          "bookBalance": "49929.00",
+          "reservedAmount": "0.00",
+          "availableBalance": "49929.00"
+        },
+        "诊断": ""
+      },
+      "发现问题": "",
+      "结果": "通过",
+      "时间": "2026-11-23T08:53:40+08:00",
+      "测试人": "S5",
+      "traceId": "5ea90e2c-9066-46a0-86d5-f4318d24e425"
+    },
+    {
+      "编号": "E2E-S5-001e",
+      "功能名称": "查询资金流水",
+      "请求": {
+        "method": "GET",
+        "path": "/api/v1/accounts/ACC-0001/fund-entries?page=1&pageSize=20",
+        "body": null
+      },
+      "期望输出": "HTTP 200；成功交易对应一条 DEPOSIT_IN/CREDIT 流水",
+      "实际输出": {
+        "httpStatus": 200,
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "items": [
+            {
+              "entryId": "8084b17e91bd40099d1c15a0ff485760",
+              "tradeNo": "TRD202611239B64DB50",
+              "entryRole": "DEPOSIT_IN",
+              "direction": "CREDIT",
+              "amount": "100.00",
+              "bookBalanceAfter": "49929.00",
+              "occurredAt": "2026-11-23T08:53:40+08:00"
+            },
+            {
+              "entryId": "d02188a153c44ed4a545f2ed0f9e594c",
+              "tradeNo": "TRD202611236D30BB78",
+              "entryRole": "TRANSFER_OUT",
+              "direction": "DEBIT",
+              "amount": "30.00",
+              "bookBalanceAfter": "49829.00",
+              "occurredAt": "2026-11-23T08:52:57+08:00"
+            },
+            {
+              "entryId": "4c849e50d98a4b478796007bb54db3de",
+              "tradeNo": "TRD20261123980C5785",
+              "entryRole": "WITHDRAW_OUT",
+              "direction": "DEBIT",
+              "amount": "50.00",
+              "bookBalanceAfter": "49859.00",
+              "occurredAt": "2026-11-23T08:52:57+08:00"
+            },
+            {
+              "entryId": "ddd4c4c265694d4fb08d62a2f4cdf598",
+              "tradeNo": "TRD202611232AAFEBFD",
+              "entryRole": "DEPOSIT_IN",
+              "direction": "CREDIT",
+              "amount": "100.00",
+              "bookBalanceAfter": "49909.00",
+              "occurredAt": "2026-11-23T08:52:56+08:00"
+            },
+            {
+              "entryId": "8fa84795b5b24097b1dda10afe04ab3c",
+              "tradeNo": "TRD20261123C97A2C92",
+              "entryRole": "DEPOSIT_IN",
+              "direction": "CREDIT",
+              "amount": "100.00",
+              "bookBalanceAfter": "49809.00",
+              "occurredAt": "2026-11-23T08:52:24+08:00"
+            },
+            {
+              "entryId": "2ba17bf6afb74a288f29541a76bfa52d",
+              "tradeNo": "TRD20261117137AF01B",
+              "entryRole": "TRANSFER_OUT",
+              "direction": "DEBIT",
+              "amount": "10.50",
+              "bookBalanceAfter": "49709.00",
+              "occurredAt": "2026-11-17T16:10:44+08:00"
+            },
+            {
+              "entryId": "a44f216672644d459b2e5934ab545f06",
+              "tradeNo": "TRD20261117B5E274A1",
+              "entryRole": "TRANSFER_OUT",
+              "direction": "DEBIT",
+              "amount": "100.00",
+              "bookBalanceAfter": "49719.50",
+              "occurredAt": "2026-11-17T16:04:16+08:00"
+            },
+            {
+              "entryId": "d0b4968eb0b54213b3eafae11be8b156",
+              "tradeNo": "TRD2026111741358272",
+              "entryRole": "TRANSFER_OUT",
+              "direction": "DEBIT",
+              "amount": "50.00",
+              "bookBalanceAfter": "49819.50",
+              "occurredAt": "2026-11-17T14:46:40+08:00"
+            },
+            {
+              "entryId": "82daad9e83e64bb8b90fb19fa7b12278",
+              "tradeNo": "TRD2026111765BF201C",
+              "entryRole": "TRANSFER_OUT",
+              "direction": "DEBIT",
+              "amount": "50.00",
+              "bookBalanceAfter": "49869.50",
+              "occurredAt": "2026-11-17T14:45:43+08:00"
+            },
+            {
+              "entryId": "b222fea782614f1f9fac891a680b5612",
+              "tradeNo": "TRD202611175B8442DB",
+              "entryRole": "TRANSFER_OUT",
+              "direction": "DEBIT",
+              "amount": "20.00",
+              "bookBalanceAfter": "49919.50",
+              "occurredAt": "2026-11-17T14:42:15+08:00"
+            },
+            {
+              "entryId": "a8b6b5ae9a9844dfbee789855fde137d",
+              "tradeNo": "TRD20261117A7AD9F3D",
+              "entryRole": "WITHDRAW_OUT",
+              "direction": "DEBIT",
+              "amount": "100.50",
+              "bookBalanceAfter": "49939.50",
+              "occurredAt": "2026-11-17T14:34:04+08:00"
+            },
+            {
+              "entryId": "b9361676cae143c784d97594011cac35",
+              "tradeNo": "TRD202611179F0334A5",
+              "entryRole": "WITHDRAW_OUT",
+              "direction": "DEBIT",
+              "amount": "10.00",
+              "bookBalanceAfter": "50040.00",
+              "occurredAt": "2026-11-17T14:32:45+08:00"
+            },
+            {
+              "entryId": "864d5ba9d5c045a3a1776139f1c4b59e",
+              "tradeNo": "TRD20261117C7A6EA81",
+              "entryRole": "TRANSFER_OUT",
+              "direction": "DEBIT",
+              "amount": "100.00",
+              "bookBalanceAfter": "50050.00",
+              "occurredAt": "2026-11-17T14:32:33+08:00"
+            },
+            {
+              "entryId": "6aa55ab1fba648e1927589bf7cb4fcfc",
+              "tradeNo": "TRD20261117877F3958",
+              "entryRole": "WITHDRAW_OUT",
+              "direction": "DEBIT",
+              "amount": "50.00",
+              "bookBalanceAfter": "50150.00",
+              "occurredAt": "2026-11-17T14:32:07+08:00"
+            },
+            {
+              "entryId": "845c0f1cdb6d417cbbb46bfcd80daeba",
+              "tradeNo": "TRD20261113CA14B92A",
+              "entryRole": "DEPOSIT_IN",
+              "direction": "CREDIT",
+              "amount": "100.00",
+              "bookBalanceAfter": "50200.00",
+              "occurredAt": "2026-11-13T09:46:25+08:00"
+            },
+            {
+              "entryId": "ec7eb19b82fa437daaa550eb765f9d5d",
+              "tradeNo": "VERIFY-DEMO-0001",
+              "entryRole": "DEPOSIT_IN",
+              "direction": "CREDIT",
+              "amount": "100.00",
+              "bookBalanceAfter": "50100.00",
+              "occurredAt": "2026-11-13T09:31:17+08:00"
+            }
+          ],
+          "total": 16,
+          "page": 1,
+          "pageSize": 20
+        },
+        "诊断": ""
+      },
+      "发现问题": "",
+      "结果": "通过",
+      "时间": "2026-11-23T08:53:40+08:00",
+      "测试人": "S5",
+      "traceId": "4fcce316-1777-4ec3-b94b-35a8a03c3017",
+      "关联信息": {
+        "tradeNo": "TRD202611239B64DB50",
+        "匹配流水条数": 1,
+        "匹配流水": [
+          {
+            "entryId": "8084b17e91bd40099d1c15a0ff485760",
+            "tradeNo": "TRD202611239B64DB50",
+            "entryRole": "DEPOSIT_IN",
+            "direction": "CREDIT",
+            "amount": "100.00",
+            "bookBalanceAfter": "49929.00",
+            "occurredAt": "2026-11-23T08:53:40+08:00"
+          }
+        ]
+      }
+    },
+    {
+      "编号": "E2E-S5-006a",
+      "功能名称": "同请求同内容重放",
+      "请求": {
+        "method": "POST",
+        "path": "/api/v1/deposits",
+        "body": {
+          "accountId": "ACC-0001",
+          "amount": "100.00",
+          "currency": "CNY",
+          "requestId": "de8177f4-db7b-44e1-87c7-78d91a5ba703"
+        }
+      },
+      "期望输出": "SUCCEEDED/SUCCESS",
+      "实际输出": {
+        "httpStatus": 200,
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "tradeNo": "TRD202611239B64DB50",
+          "status": "SUCCESS",
+          "reasonCode": null
+        },
+        "诊断": ""
+      },
+      "发现问题": "",
+      "结果": "通过",
+      "时间": "2026-11-23T08:53:40+08:00",
+      "测试人": "S5",
+      "traceId": "d48ab874-889d-46d3-8cc5-59d92ca36201",
+      "关联信息": {
+        "requestId": "de8177f4-db7b-44e1-87c7-78d91a5ba703"
+      }
+    },
+    {
+      "编号": "E2E-S5-006b",
+      "功能名称": "同请求不同内容冲突",
+      "请求": {
+        "method": "POST",
+        "path": "/api/v1/deposits",
+        "body": {
+          "accountId": "ACC-0001",
+          "amount": "200.00",
+          "currency": "CNY",
+          "requestId": "de8177f4-db7b-44e1-87c7-78d91a5ba703"
+        }
+      },
+      "期望输出": "REQUEST_CONFLICT",
+      "实际输出": {
+        "httpStatus": 409,
+        "code": "REQUEST_CONFLICT",
+        "message": "同一请求号的内容与原交易不一致",
+        "data": null,
+        "诊断": ""
+      },
+      "发现问题": "",
+      "结果": "通过",
+      "时间": "2026-11-23T08:53:41+08:00",
+      "测试人": "S5",
+      "traceId": "7b29f079-6477-4675-b57c-fffd1c88b4c8",
+      "关联信息": {
+        "requestId": "de8177f4-db7b-44e1-87c7-78d91a5ba703"
+      }
+    },
+    {
+      "编号": "E2E-S5-005a",
+      "功能名称": "单笔超限存款",
+      "请求": {
+        "method": "POST",
+        "path": "/api/v1/deposits",
+        "body": {
+          "accountId": "ACC-0001",
+          "amount": "50000.01",
+          "currency": "CNY",
+          "requestId": "f17e5ed9-0caf-42a5-83ac-10e7f2eec11e"
+        }
+      },
+      "期望输出": "SINGLE_LIMIT_EXCEEDED",
+      "实际输出": {
+        "httpStatus": 422,
+        "code": "SINGLE_LIMIT_EXCEEDED",
+        "message": "风控拒绝: SINGLE_LIMIT_EXCEEDED",
+        "data": null,
+        "诊断": ""
+      },
+      "发现问题": "",
+      "结果": "通过",
+      "时间": "2026-11-23T08:53:41+08:00",
+      "测试人": "S5",
+      "traceId": "af368af9-2776-4d55-b0ed-d9628b6d7faf",
+      "关联信息": {
+        "requestId": "f17e5ed9-0caf-42a5-83ac-10e7f2eec11e"
+      }
+    },
+    {
+      "编号": "E2E-S5-005b",
+      "功能名称": "非法币种存款",
+      "请求": {
+        "method": "POST",
+        "path": "/api/v1/deposits",
+        "body": {
+          "accountId": "ACC-0001",
+          "amount": "100.00",
+          "currency": "USD",
+          "requestId": "8830221c-f5b0-4382-bf26-5114244ffa0c"
+        }
+      },
+      "期望输出": "INVALID_ARGUMENT",
+      "实际输出": {
+        "httpStatus": 400,
+        "code": "INVALID_ARGUMENT",
+        "message": "币种固定为 CNY",
+        "data": null,
+        "诊断": ""
+      },
+      "发现问题": "",
+      "结果": "通过",
+      "时间": "2026-11-23T08:53:41+08:00",
+      "测试人": "S5",
+      "traceId": "d6fc1618-1fb6-4308-8915-9e1b314c37dd",
+      "关联信息": {
+        "requestId": "8830221c-f5b0-4382-bf26-5114244ffa0c"
+      }
+    },
+    {
+      "编号": "E2E-S5-002a",
+      "功能名称": "取款成功",
+      "请求": {
+        "method": "POST",
+        "path": "/api/v1/withdrawals",
+        "body": {
+          "accountId": "ACC-0001",
+          "amount": "50.00",
+          "currency": "CNY",
+          "requestId": "499f9471-be5d-415f-b7fe-804a8ad9855d"
+        }
+      },
+      "期望输出": "SUCCEEDED",
+      "实际输出": {
+        "httpStatus": 200,
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "tradeNo": "TRD20261123EB41CE96",
+          "status": "SUCCESS",
+          "reasonCode": null
+        },
+        "诊断": ""
+      },
+      "发现问题": "",
+      "结果": "通过",
+      "时间": "2026-11-23T08:53:41+08:00",
+      "测试人": "S5",
+      "traceId": "14492daf-3196-444d-b53d-8a53b50bf618",
+      "关联信息": {
+        "requestId": "499f9471-be5d-415f-b7fe-804a8ad9855d"
+      }
+    },
+    {
+      "编号": "E2E-S5-002b",
+      "功能名称": "取款超单笔限额",
+      "请求": {
+        "method": "POST",
+        "path": "/api/v1/withdrawals",
+        "body": {
+          "accountId": "ACC-0001",
+          "amount": "999999.00",
+          "currency": "CNY",
+          "requestId": "9b31cdd4-918f-4a82-9d2a-be1e5e892990"
+        }
+      },
+      "期望输出": "SINGLE_LIMIT_EXCEEDED",
+      "实际输出": {
+        "httpStatus": 422,
+        "code": "SINGLE_LIMIT_EXCEEDED",
+        "message": "风控拒绝: SINGLE_LIMIT_EXCEEDED",
+        "data": null,
+        "诊断": ""
+      },
+      "发现问题": "",
+      "结果": "通过",
+      "时间": "2026-11-23T08:53:41+08:00",
+      "测试人": "S5",
+      "traceId": "d3d1c1ff-43b7-42c7-ac09-5f6ba28d7775",
+      "关联信息": {
+        "requestId": "9b31cdd4-918f-4a82-9d2a-be1e5e892990"
+      }
+    },
+    {
+      "编号": "E2E-S5-002c",
+      "功能名称": "开立低余额账户",
+      "请求": {
+        "method": "POST",
+        "path": "/api/v1/accounts",
+        "body": {
+          "currency": "CNY",
+          "requestId": "87e27f5c-645f-4968-9c36-4ca9ee23b89e"
+        }
+      },
+      "期望输出": "SUCCEEDED",
+      "实际输出": {
+        "httpStatus": 200,
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "accountId": "ec50f6e0cb2f4f0a94c910045dcf716f",
+          "currency": "CNY",
+          "status": "ACTIVE",
+          "bookBalance": "0.00",
+          "reservedAmount": "0.00",
+          "availableBalance": "0.00",
+          "personalSingleLimit": null,
+          "personalDailyLimit": null,
+          "createdAt": "2026-11-23T08:53:41+08:00",
+          "restrictions": []
+        },
+        "诊断": ""
+      },
+      "发现问题": "",
+      "结果": "通过",
+      "时间": "2026-11-23T08:53:41+08:00",
+      "测试人": "S5",
+      "traceId": "facebdd2-ac4f-4065-9525-da3df96847ff",
+      "关联信息": {
+        "requestId": "87e27f5c-645f-4968-9c36-4ca9ee23b89e"
+      }
+    },
+    {
+      "编号": "E2E-S5-002d",
+      "功能名称": "低余额账户存入 100.00",
+      "请求": {
+        "method": "POST",
+        "path": "/api/v1/deposits",
+        "body": {
+          "accountId": "ec50f6e0cb2f4f0a94c910045dcf716f",
+          "amount": "100.00",
+          "currency": "CNY",
+          "requestId": "dacb9ccf-4fdb-4d44-bcba-d89486b4557a"
+        }
+      },
+      "期望输出": "SUCCEEDED",
+      "实际输出": {
+        "httpStatus": 200,
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "tradeNo": "TRD202611239D257A17",
+          "status": "SUCCESS",
+          "reasonCode": null
+        },
+        "诊断": ""
+      },
+      "发现问题": "",
+      "结果": "通过",
+      "时间": "2026-11-23T08:53:41+08:00",
+      "测试人": "S5",
+      "traceId": "4c692677-e965-43d9-a11d-898cebb7db9f",
+      "关联信息": {
+        "requestId": "dacb9ccf-4fdb-4d44-bcba-d89486b4557a"
+      }
+    },
+    {
+      "编号": "E2E-S5-002e",
+      "功能名称": "可用余额不足取款",
+      "请求": {
+        "method": "POST",
+        "path": "/api/v1/withdrawals",
+        "body": {
+          "accountId": "ec50f6e0cb2f4f0a94c910045dcf716f",
+          "amount": "200.00",
+          "currency": "CNY",
+          "requestId": "3a898b62-5d3a-40d5-a45b-fe0aec2967bf"
+        }
+      },
+      "期望输出": "INSUFFICIENT_AVAILABLE_BALANCE",
+      "实际输出": {
+        "httpStatus": 422,
+        "code": "INSUFFICIENT_AVAILABLE_BALANCE",
+        "message": "交易被拒绝: INSUFFICIENT_AVAILABLE_BALANCE",
+        "data": null,
+        "诊断": ""
+      },
+      "发现问题": "",
+      "结果": "通过",
+      "时间": "2026-11-23T08:53:41+08:00",
+      "测试人": "S5",
+      "traceId": "c6612ec4-1c4b-4b4c-a40f-ced13571b4ba",
+      "关联信息": {
+        "requestId": "3a898b62-5d3a-40d5-a45b-fe0aec2967bf",
+        "accountId": "ec50f6e0cb2f4f0a94c910045dcf716f"
+      }
+    },
+    {
+      "编号": "E2E-S5-003a",
+      "功能名称": "本行转账成功",
+      "请求": {
+        "method": "POST",
+        "path": "/api/v1/transfers",
+        "body": {
+          "payerAccountId": "ACC-0001",
+          "payeeAccountId": "ACC-0002",
+          "amount": "30.00",
+          "currency": "CNY",
+          "requestId": "2a1f56bf-8f49-45d6-bf30-143745020a66"
+        }
+      },
+      "期望输出": "SUCCEEDED",
+      "实际输出": {
+        "httpStatus": 200,
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "tradeNo": "TRD20261123184FB65A",
+          "status": "SUCCESS",
+          "reasonCode": null
+        },
+        "诊断": ""
+      },
+      "发现问题": "",
+      "结果": "通过",
+      "时间": "2026-11-23T08:53:41+08:00",
+      "测试人": "S5",
+      "traceId": "f2c69183-90ee-47b4-a050-aaf7dba92abe",
+      "关联信息": {
+        "requestId": "2a1f56bf-8f49-45d6-bf30-143745020a66"
+      }
+    },
+    {
+      "编号": "E2E-S5-007a",
+      "功能名称": "经网关登录",
+      "请求": {
+        "method": "POST",
+        "path": "/api/v1/auth/login",
+        "body": {
+          "identityId": "UID-000002",
+          "password": "***"
+        }
+      },
+      "期望输出": "HTTP 200，code=SUCCEEDED，data.token 非空",
+      "实际输出": {
+        "httpStatus": 200,
+        "code": "SUCCEEDED",
+        "message": "请求成功",
+        "data": {
+          "token": "<已脱敏>",
+          "tokenType": "Bearer",
+          "expiresAt": "2026-11-23T01:23:42.209538400Z",
+          "customer": {
+            "customerId": "CUS-0002",
+            "identityId": "UID-000002",
+            "roles": [],
+            "accountScope": [],
+            "authorizationVersion": 0
+          }
+        },
+        "诊断": ""
+      },
+      "发现问题": "",
+      "结果": "通过",
+      "时间": "2026-11-23T08:53:42+08:00",
+      "测试人": "S5",
+      "traceId": "4e835d80-075d-4128-9afe-8c8bec088b37"
+    },
+    {
+      "编号": "E2E-S5-007b",
+      "功能名称": "越权查询他人交易",
+      "请求": {
+        "method": "GET",
+        "path": "/api/v1/transactions/{tradeNo}?reason=...",
+        "body": null
+      },
+      "期望输出": "HTTP 404，code=TRADE_NOT_FOUND",
+      "实际输出": {
+        "httpStatus": 0,
+        "code": null,
+        "message": null,
+        "data": null,
+        "诊断": "'ascii' codec can't encode characters in position 52-54: ordinal not in range(128)"
+      },
+      "发现问题": "该用例结果以真实响应为准；若后端口径不是 404，需由 S3/S1 复核。",
+      "结果": "失败",
+      "时间": "2026-11-23T08:53:42+08:00",
+      "测试人": "S5",
+      "traceId": "",
+      "关联信息": {
+        "tradeNo": "TRD202611239B64DB50",
+        "查询方": "UID-000002"
+      }
+    }
+  ]
+}
