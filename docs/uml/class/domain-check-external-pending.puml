@@ -1,0 +1,25 @@
+@startuml
+left to right direction
+skinparam defaultFontName Microsoft YaHei
+skinparam monochrome true
+skinparam shadowing false
+
+object "<u>付款客户 : Customer</u>" as C
+object "<u>付款账户 : Account</u>" as A {
+  账户状态 = 正常
+  B = 500，R = 100，A = 400
+}
+object "<u>跨行交易 : Transaction</u>" as T {
+  金额 = 100
+  处理状态 = 待确认
+}
+object "<u>跨行转账单 : TransferOrder</u>" as O {
+  转账类型 = 跨行
+  模拟外部收款标识 = EXT-001
+  渠道处理状态 = 未知
+}
+
+A -- C : 归属
+T -- A : 经由账户发起
+T -- O : 对应
+@enduml

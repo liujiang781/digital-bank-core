@@ -1,0 +1,32 @@
+@startuml
+left to right direction
+skinparam defaultFontName Microsoft YaHei
+skinparam monochrome true
+skinparam shadowing false
+
+actor "运营人员\nACT-O" as Ops
+actor "风控专员\nACT-R" as Risk
+rectangle "模拟资金渠道\nACT-F" as Channel <<actor>>
+rectangle "模拟外部银行\nACT-B" as Bank <<actor>>
+
+rectangle "数字银行核心业务模拟系统 / 运营模块" {
+  usecase "UC-OP-01\n查看客户列表" as Customers
+  usecase "UC-AC-05\n冻结账户" as Freeze
+  usecase "UC-AC-06\n解冻账户" as Unfreeze
+  usecase "UC-TR-05\n查询交易结果" as Detail
+  usecase "UC-TR-06\n查询交易流水" as Entries
+  usecase "UC-TR-08\n核对待确认交易" as Reconcile
+  usecase "UC-TR-09\n重试资金恢复" as Recover
+}
+
+Ops -- Customers
+Ops -- Freeze
+Ops -- Unfreeze
+Ops -- Detail
+Ops -- Entries
+Ops -- Reconcile
+Ops -- Recover
+Risk -- Freeze
+Channel -- Reconcile
+Bank -- Reconcile
+@enduml

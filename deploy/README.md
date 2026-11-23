@@ -88,7 +88,7 @@ GRANT SELECT, INSERT, UPDATE ON payment_db.transaction_flow    TO 'account_servi
 GRANT SELECT, INSERT, UPDATE ON payment_db.`transaction`       TO 'account_service'@'%';
 GRANT SELECT, INSERT         ON payment_db.audit_log           TO 'account_service'@'%';
 GRANT SELECT ON payment_db.customer        TO 'account_service'@'%';
-GRANT SELECT ON payment_db.transfer_order  TO 'account_service'@'%';
+GRANT SELECT, UPDATE ON payment_db.transfer_order TO 'account_service'@'%';
 GRANT SELECT ON payment_db.risk_rule       TO 'account_service'@'%';
 GRANT SELECT ON payment_db.risk_event      TO 'account_service'@'%';
 GRANT SELECT ON payment_db.risk_freeze_release TO 'account_service'@'%';
@@ -96,6 +96,7 @@ GRANT LOCK TABLES ON payment_db.*          TO 'account_service'@'%';
 
 GRANT SELECT, INSERT, UPDATE ON payment_db.`transaction`          TO 'transaction_service'@'%';
 GRANT SELECT, INSERT, UPDATE ON payment_db.mock_channel_deposit   TO 'transaction_service'@'%';
+GRANT SELECT, INSERT ON payment_db.transfer_order TO 'transaction_service'@'%';
 GRANT SELECT ON payment_db.account            TO 'transaction_service'@'%';
 GRANT SELECT ON payment_db.account_reservation TO 'transaction_service'@'%';
 GRANT SELECT, INSERT, UPDATE ON payment_db.trade_manual_action TO 'transaction_service'@'%';
@@ -106,6 +107,10 @@ GRANT SELECT, INSERT         ON payment_db.risk_event     TO 'risk_service'@'%';
 GRANT SELECT ON payment_db.account     TO 'risk_service'@'%';
 GRANT SELECT ON payment_db.account_status_log TO 'risk_service'@'%';
 GRANT SELECT, INSERT ON payment_db.risk_freeze_release TO 'risk_service'@'%';
+GRANT SELECT, INSERT ON payment_db.risk_alert_disposal TO 'risk_service'@'%';
+GRANT SELECT, INSERT, UPDATE ON payment_db.risk_change_request TO 'risk_service'@'%';
+GRANT SELECT, INSERT ON payment_db.risk_change_approval TO 'risk_service'@'%';
+GRANT SELECT, INSERT, UPDATE ON payment_db.risk_list_entry TO 'risk_service'@'%';
 GRANT INSERT ON payment_db.audit_log TO 'risk_service'@'%';
 GRANT SELECT ON payment_db.`transaction` TO 'risk_service'@'%';
 
@@ -245,6 +250,13 @@ powershell -ExecutionPolicy Bypass -File deploy/scripts/backup-restore.ps1 -Mode
 3. `backend/transaction-service/src/main/resources/db/s3-incremental.sql`
 4. `backend/risk-service/src/main/resources/db/s3-risk-incremental.sql`
 5. `deploy/sql/s2-requirement-gaps-incremental.sql`（新增 `risk_freeze_release` 风控解除结论表）
+
+已有数据库升级到 RK-06 高频标记前，执行一次
+`deploy/sql/s3-frequency-upgrade.sql`，并按上面的授权表补齐转账单、风险审批、名单及告警处置权限。
+新库从当前 `schema.sql` 和 `init-data.sql` 初始化即包含 RK-06。
+风控服务默认每 5 秒检查已受理出账，在同一账户 60 秒内第 5 笔起标记
+`HIGH_FREQUENCY`。窗口、阈值及扫描间隔分别可由
+`RISK_FREQUENCY_WINDOW_SECONDS`、`RISK_FREQUENCY_THRESHOLD`、`RISK_FREQUENCY_POLL_MS` 配置。
 
 第 5 个是本次新增，缺少该表会让风控解除审批报 500。前 4 个已执行过的库不必重跑；
 第 3 个含 `ALTER TABLE audit_log DROP CHECK`，重复执行会报"约束不存在"。

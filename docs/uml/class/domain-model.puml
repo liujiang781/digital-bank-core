@@ -1,34 +1,101 @@
 @startuml
-skinparam defaultFontName "Microsoft YaHei"
-title 图 1-7 核心领域概念模型（按现有整合稿重建）
+left to right direction
+skinparam defaultFontName Microsoft YaHei
+skinparam monochrome true
+skinparam shadowing false
+skinparam classAttributeIconSize 0
+skinparam classBackgroundColor White
+skinparam nodesep 70
+skinparam ranksep 90
+hide circle
+title 数字银行核心业务领域模型
+
 class "Customer" as C {
-  身份与实名状态
+  客户编号
+  实名状态
+  --
+  维护个人资料()
+  判断是否可开立账户()
 }
+
 class "Account" as A {
-  账户状态及 B、R、A
+  账户号
+  币种
+  账户状态
+  账面余额 B
+  占用金额 R
+  /可用余额 A
+  --
+  计算可用余额()
+  冻结账户()
+  解除冻结()
+  占用出账金额()
+  释放出账占用()
+  记入资金变动()
+  判断是否可注销()
 }
+
 class "Transaction" as T {
-  请求、处理状态与 requestId
+  交易号
+  请求号
+  业务类型
+  金额
+  处理状态
+  --
+  判定是否同一请求()
+  确认处理结果()
 }
+
 class "FundEntry" as F {
-  实际资金变动；只追加
+  流水号
+  资金方向
+  变动金额
+  记账后余额
+  记账时间
+  --
+  记录实际资金变动()
 }
+
 class "TransferOrder" as O {
-  付款和收款账户；模拟跨行状态
+  转账类型
+  模拟外部收款标识
+  渠道处理状态
+  --
+  确认模拟渠道结果()
+  判定资金恢复条件()
 }
+
 class "RiskRule" as RR {
-  单笔及日累计限额
+  规则编号
+  规则版本
+  判定条件
+  启用状态
+  --
+  判断交易是否命中()
 }
+
 class "RiskEvent" as RE {
-  规则命中与原因
+  风险事件号
+  命中版本
+  命中原因
+  判定结果
+  发生时间
+  --
+  记录规则命中()
 }
-C "1" -- "0..*" A : 拥有
-A "1" -- "0..*" T : 关联
-T "1" -- "0..*" F : 产生
-T "1" -- "0..1" O : 对应
-RR "1" -- "0..*" RE : 触发
-T "1" -- "0..*" RE : 关联
+
+A "0..*\n名下账户" <--> "1\n账户所有人" C : 归属
+T "0..*\n发起记录" --> "1\n发起账户" A : 经由账户发起
+T "1\n原交易" <--> "0..*\n资金流水" F : 产生
+F "0..*\n账户流水" --> "1\n记账账户" A : 记录资金变动
+T "1\n原交易" <--> "0..1\n转账单" O : 对应
+O "0..*\n收款业务" --> "0..1\n本行收款账户" A : 指定本行收款账户
+T "0..*\n受评交易" --> "0..*\n命中规则" RR : 命中
+(T, RR) .. RE
+
 note bottom of A
-A = B - R；B >= 0；0 <= R <= B
+  每名客户最多三个未注销账户。
+  名下账户含已注销的历史账户。
+  A = B - R，且 0 ≤ R ≤ B。
 end note
 @enduml

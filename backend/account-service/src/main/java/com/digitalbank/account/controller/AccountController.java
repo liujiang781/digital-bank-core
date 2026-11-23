@@ -106,9 +106,12 @@ public class AccountController {
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime startTime,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime endTime,
             @RequestParam(required = false) String tradeNo, @RequestParam(required = false) String reason,
+            @RequestParam(required = false) String minAmount, @RequestParam(required = false) String maxAmount,
+            @RequestParam(required = false) String businessType, @RequestParam(required = false) String direction,
             HttpServletRequest request) {
         return ok(accounts.fundEntries(access.requireActor(request), accountId, page, pageSize,
-                startTime, endTime, tradeNo, reason), request);
+                new FundEntryFilter(startTime, endTime, tradeNo, minAmount, maxAmount, businessType, direction),
+                reason), request);
     }
 
     private <T> ApiResponse<T> ok(T data, HttpServletRequest request) {

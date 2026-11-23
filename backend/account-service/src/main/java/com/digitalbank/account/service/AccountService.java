@@ -36,6 +36,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class AccountService {
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
     private static final Set<String> BACK_OFFICE = Set.of("OPERATIONS", "RISK");
+    private static final Set<String> FUND_BUSINESS_TYPES =
+            Set.of("DEPOSIT", "WITHDRAWAL", "INTERNAL_TRANSFER", "EXTERNAL_TRANSFER");
+    private static final Set<String> FUND_DIRECTIONS = Set.of("CREDIT", "DEBIT");
     private final JdbcTemplate jdbc;
     private final AccountAccess access;
     private final ObjectMapper json;
@@ -149,7 +152,7 @@ public class AccountService {
         return new Page<>(items, count == null ? 0 : count, page, pageSize);
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public AccountView get(Actor actor, String accountId, String reason) {
         Account account = load(accountId, false);
         boolean staff = isBackOffice(actor);
@@ -164,7 +167,7 @@ public class AccountService {
         return result;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public BalanceView balance(Actor actor, String accountId, String reason) {
         Account account = load(accountId, false);
         boolean staff = isBackOffice(actor);
@@ -287,7 +290,7 @@ public class AccountService {
         });
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Page<OperationView> operations(Actor actor, String accountId, int page, int pageSize,
             OffsetDateTime startTime, OffsetDateTime endTime, String reason) {
         Account account = load(accountId, false);
@@ -310,6 +313,13 @@ public class AccountService {
     @Transactional
     public Page<FundEntryView> fundEntries(Actor actor, String accountId, int page, int pageSize,
             OffsetDateTime startTime, OffsetDateTime endTime, String tradeNo, String reason) {
+        return fundEntries(actor, accountId, page, pageSize,
+                new FundEntryFilter(startTime, endTime, tradeNo, null, null, null, null), reason);
+    }
+
+    @Transactional
+    public Page<FundEntryView> fundEntries(Actor actor, String accountId, int page, int pageSize,
+            FundEntryFilter query, String reason) {
         Account account = load(accountId, false);
         boolean staff = isBackOffice(actor);
         if (staff) {
@@ -319,7 +329,8 @@ public class AccountService {
             requireRead(actor, account);
         }
         List<Object> args = new ArrayList<>(List.of(accountId));
-        String filter = timeFilter("account_id = ?", args, startTime, endTime);
+        String filter = timeFilter("account_id = ?", args, query.startTime(), query.endTime());
+        String tradeNo = query.tradeNo();
         if (tradeNo != null) {
             if (tradeNo.isBlank() || tradeNo.length() > 32) {
                 throw error(ErrorCode.INVALID_ARGUMENT, "交易号不合法");
@@ -327,9 +338,39 @@ public class AccountService {
             filter += " AND trade_no = ?";
             args.add(tradeNo);
         }
-        Page<FundEntryView> entries = queryPage("transaction_flow", filter, args, page, pageSize,
+        if (query.businessType() != null) {
+            if (!FUND_BUSINESS_TYPES.contains(query.businessType())) {
+                throw error(ErrorCode.INVALID_ARGUMENT, "交易类型不合法");
+            }
+            filter += " AND business_type = ?";
+            args.add(query.businessType());
+        }
+        if (query.direction() != null) {
+            if (!FUND_DIRECTIONS.contains(query.direction())) {
+                throw error(ErrorCode.INVALID_ARGUMENT, "资金方向不合法");
+            }
+            filter += " AND direction = ?";
+            args.add(query.direction());
+        }
+        BigDecimal minAmount = query.minAmount() == null ? null : Money.parseNonNegative(query.minAmount());
+        BigDecimal maxAmount = query.maxAmount() == null ? null : Money.parseNonNegative(query.maxAmount());
+        if (minAmount != null && maxAmount != null && minAmount.compareTo(maxAmount) > 0) {
+            throw error(ErrorCode.INVALID_ARGUMENT, "最低金额不得超过最高金额");
+        }
+        if (minAmount != null) {
+            filter += " AND amount >= ?";
+            args.add(minAmount);
+        }
+        if (maxAmount != null) {
+            filter += " AND amount <= ?";
+            args.add(maxAmount);
+        }
+        String ledger = "(SELECT f.*, t.business_type FROM transaction_flow f "
+                + "JOIN `transaction` t ON t.trade_no = f.trade_no) fund_entries";
+        Page<FundEntryView> entries = queryPage(ledger, filter, args, page, pageSize,
                 (rs, n) -> new FundEntryView(rs.getString("entry_id"), rs.getString("trade_no"),
-                        rs.getString("entry_role"), rs.getString("direction"), Money.format(rs.getBigDecimal("amount")),
+                        rs.getString("entry_role"), rs.getString("business_type"), rs.getString("direction"),
+                        Money.format(rs.getBigDecimal("amount")),
                         Money.format(rs.getBigDecimal("book_balance_after")),
                         offset(rs.getObject("created_at", LocalDateTime.class))), "created_at DESC, id DESC");
         if (staff) audit(actor, "FUND_ENTRIES_QUERY", accountId, reason, tradeNo);

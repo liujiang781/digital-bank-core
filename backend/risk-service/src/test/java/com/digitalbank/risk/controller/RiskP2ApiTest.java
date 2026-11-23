@@ -12,7 +12,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.digitalbank.common.auth.AuthTokens;
 import com.digitalbank.common.auth.SessionIdentity;
 import com.digitalbank.common.auth.SessionVerifier;
+import com.digitalbank.risk.service.OutgoingFrequencyMonitor;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -48,6 +51,8 @@ class RiskP2ApiTest {
     private MockMvc mockMvc;
     @Autowired
     private JdbcTemplate jdbc;
+    @Autowired
+    private OutgoingFrequencyMonitor frequencyMonitor;
     @MockitoBean
     private SessionVerifier sessionVerifier;
 
@@ -135,6 +140,7 @@ class RiskP2ApiTest {
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.eventId").value("EVT-P2"))
+                .andExpect(jsonPath("$.data.tradeNo").value("TRD-P2"))
                 .andExpect(jsonPath("$.data.decision").value("CONFIRMED"));
         // 同键重放返回原结果，不新增处置记录
         mockMvc.perform(post("/api/v1/risk/alerts/EVT-P2/dispose")
@@ -143,6 +149,43 @@ class RiskP2ApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.decision").value("CONFIRMED"));
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM risk_alert_disposal", Integer.class));
+        assertEquals("TRD-P2", jdbc.queryForObject(
+                "SELECT trade_no FROM audit_log WHERE action = 'RISK_ALERT_DISPOSE'", String.class));
+    }
+
+    @Test
+    void frequencyMarksTheFifthAcceptedOutgoingOnceWithoutChangingSettlement() throws Exception {
+        jdbc.update("INSERT INTO risk_rule (rule_id, rule_type, enabled, rule_version) "
+                + "VALUES ('RK-06', 'FREQUENCY_MONITOR', 1, 3)");
+        LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Shanghai")).withNano(0);
+        acceptedTrade("outside-window", "WITHDRAWAL", IN_SCOPE, now.minusSeconds(85));
+        acceptedTrade("another-account", "WITHDRAWAL", OUT_SCOPE, now.minusSeconds(20));
+        acceptedTrade("deposit-is-not-outgoing", "DEPOSIT", IN_SCOPE, now.minusSeconds(20));
+        acceptedTrade("unaccepted", "WITHDRAWAL", IN_SCOPE, null);
+        acceptedTrade("first", "WITHDRAWAL", IN_SCOPE, now.minusSeconds(20));
+        acceptedTrade("second", "EXTERNAL_TRANSFER", IN_SCOPE, now.minusSeconds(19));
+        acceptedTrade("third", "INTERNAL_TRANSFER", IN_SCOPE, now.minusSeconds(18));
+        acceptedTrade("fourth", "WITHDRAWAL", IN_SCOPE, now.minusSeconds(17));
+        frequencyMonitor.scan();
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM risk_event WHERE rule_id = 'RK-06'", Integer.class));
+
+        acceptedTrade("fifth", "EXTERNAL_TRANSFER", IN_SCOPE, now.minusSeconds(16));
+        frequencyMonitor.scan();
+        frequencyMonitor.scan();
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM risk_event WHERE rule_id = 'RK-06'", Integer.class));
+        assertEquals("PROCESSING", jdbc.queryForObject("SELECT status FROM `transaction` WHERE trade_no = 'fifth'",
+                String.class));
+        mockMvc.perform(get("/api/v1/risk/events").header("Authorization", "Bearer " + RISK1_TOKEN)
+                        .param("result", "MARK").param("reasonCode", "HIGH_FREQUENCY").param("reason", "复核告警"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].tradeNo").value("fifth"))
+                .andExpect(jsonPath("$.data.items[0].ruleVersion").value(3));
+    }
+
+    private void acceptedTrade(String tradeNo, String type, String account, LocalDateTime acceptedAt) {
+        jdbc.update("INSERT INTO `transaction` (trade_no, identity_id, business_type, request_id, request_hash, "
+                        + "account_id, amount, status, accepted_at) VALUES (?, 'owner', ?, ?, 'hash', ?, 100, ?, ?)",
+                tradeNo, type, "req-" + tradeNo, account, acceptedAt == null ? "ACCEPTED" : "PROCESSING", acceptedAt);
     }
 
     @Test

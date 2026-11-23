@@ -18,6 +18,13 @@ public final class Money {
         return amount;
     }
 
+    public static BigDecimal parseNonNegative(String value) {
+        if (value == null || !AMOUNT.matcher(value).matches()) {
+            throw new BizException(ErrorCode.INVALID_ARGUMENT, "金额范围须为非负、两位小数字符串，且在 DECIMAL(18,2) 范围内");
+        }
+        return new BigDecimal(value);
+    }
+
     public static String format(BigDecimal value) {
         return value.setScale(2, RoundingMode.UNNECESSARY).toPlainString();
     }

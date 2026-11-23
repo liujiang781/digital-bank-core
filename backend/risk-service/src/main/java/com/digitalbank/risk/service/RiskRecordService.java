@@ -22,8 +22,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class RiskRecordService {
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
-    private static final Set<String> RESULTS = Set.of("PASS", "REJECT");
-    private static final Set<String> REASONS = Set.of("ACCOUNT_STATUS", "SINGLE_LIMIT", "DAILY_LIMIT");
+    private static final Set<String> RESULTS = Set.of("PASS", "REJECT", "MARK");
+    private static final Set<String> REASONS = Set.of("ACCOUNT_STATUS", "SINGLE_LIMIT", "DAILY_LIMIT", "HIGH_FREQUENCY");
 
     private final JdbcTemplate jdbc;
 
@@ -40,10 +40,13 @@ public class RiskRecordService {
             throw new BizException(ErrorCode.INVALID_ARGUMENT, "请填写查询原因");
         }
         if (result != null && !result.isBlank() && !RESULTS.contains(result)) {
-            throw new BizException(ErrorCode.INVALID_ARGUMENT, "result 仅支持 PASS/REJECT");
+            throw new BizException(ErrorCode.INVALID_ARGUMENT, "result 仅支持 PASS/REJECT/MARK");
         }
         if (reasonCode != null && !reasonCode.isBlank() && !REASONS.contains(reasonCode)) {
             throw new BizException(ErrorCode.INVALID_ARGUMENT, "reasonCode 不是合法的风险原因码");
+        }
+        if (startTime != null && endTime != null && startTime.isAfter(endTime)) {
+            throw new BizException(ErrorCode.INVALID_ARGUMENT, "开始时间不得晚于结束时间");
         }
         List<Object> args = new ArrayList<>(identity.accountScope());
         StringBuilder where = new StringBuilder(" WHERE t.account_id IN ("

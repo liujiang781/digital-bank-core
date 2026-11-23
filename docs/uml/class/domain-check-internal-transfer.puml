@@ -1,0 +1,42 @@
+@startuml
+left to right direction
+skinparam defaultFontName Microsoft YaHei
+skinparam monochrome true
+skinparam shadowing false
+
+object "<u>付款客户 : Customer</u>" as P
+object "<u>收款客户 : Customer</u>" as Q
+object "<u>付款账户 : Account</u>" as A {
+  账户状态 = 正常
+  B = 400，R = 0，A = 400
+}
+object "<u>收款账户 : Account</u>" as B {
+  账户状态 = 正常
+  B = 120，R = 0，A = 120
+}
+object "<u>转账交易 : Transaction</u>" as T {
+  金额 = 100
+  处理状态 = 成功
+}
+object "<u>本行转账单 : TransferOrder</u>" as O {
+  转账类型 = 本行
+}
+object "<u>付款流水 : FundEntry</u>" as F1 {
+  资金方向 = 出账
+  变动金额 = 100
+}
+object "<u>收款流水 : FundEntry</u>" as F2 {
+  资金方向 = 入账
+  变动金额 = 100
+}
+
+A -- P : 归属
+B -- Q : 归属
+T -- A : 经由账户发起
+T -- O : 对应
+O -- B : 指定本行收款账户
+T -- F1 : 产生
+T -- F2 : 产生
+F1 -- A : 记录资金变动
+F2 -- B : 记录资金变动
+@enduml
