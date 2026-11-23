@@ -50,6 +50,7 @@ class PostingIntegrationTest {
     private static final String WITHDRAWAL_RESULTS = "/internal/v1/postings/withdrawal-results";
 
     @Autowired PostingService postings;
+    @Autowired com.digitalbank.account.service.AccountPolicy policy;
     @Autowired JdbcTemplate jdbc;
     @Autowired MockMvc mvc;
 
@@ -336,9 +337,9 @@ class PostingIntegrationTest {
                         + "outgoing_daily_limit, enabled, rule_version) VALUES (?, 'LIMIT_POLICY', 50000.00, "
                         + "1000.00, 150.00, 1, 1)", "daily-policy");
         withdrawal("limit-one", "100.00");
-        withdrawal("limit-two", "100.00");
+        transfer("limit-two", "100.00");
         var commands = List.of(outgoingCommand("limit-one", "100.00", null),
-                outgoingCommand("limit-two", "100.00", null));
+                outgoingCommand("limit-two", "100.00", "payee"));
         List<Outcome> results;
         try (var executor = Executors.newFixedThreadPool(2)) {
             var first = executor.submit(() -> postings.reserve(commands.get(0)));
@@ -605,6 +606,12 @@ class PostingIntegrationTest {
         String tradeNo = "external-failure";
         externalTransfer(tradeNo, "100.00");
         postings.reserve(outgoingCommand(tradeNo, "100.00", null));
+        assertThat(policy.dailyUsed("payer")).isEqualByComparingTo("100.00");
+        internalPost(EXTERNAL_RESULTS, externalReceipt(tradeNo, "100.00", "UNKNOWN", null, "CHANNEL_TIMEOUT"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("UNKNOWN"));
+        assertMoney("payer", "500.00", "100.00");
+        assertThat(policy.dailyUsed("payer")).isEqualByComparingTo("100.00");
         String failure = externalReceipt(tradeNo, "100.00", "FAILED", "failure-evidence", "CHANNEL_DECLINED");
         jdbc.execute("ALTER TABLE account_reservation ADD CONSTRAINT test_block_external_release "
                 + "CHECK (status <> 'RELEASED')");
@@ -637,6 +644,7 @@ class PostingIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("FAILED"));
         assertMoney("payer", "500.00", "0.00");
+        assertThat(policy.dailyUsed("payer")).isEqualByComparingTo("0.00");
         assertThat(flowCount(tradeNo)).isZero();
     }
 

@@ -14,6 +14,7 @@ import com.digitalbank.common.api.ErrorCode;
 import com.digitalbank.common.exception.BizException;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
@@ -55,6 +56,41 @@ class AccountLifecycleIntegrationTest {
                 + "VALUES ('customer-c1', 'identity-c1', '客户一', 'VERIFIED', 'NORMAL')");
         jdbc.update("INSERT INTO customer (customer_id, identity_id, name, real_name_status, status) "
                 + "VALUES ('customer-c2', 'identity-c2', '客户二', 'VERIFIED', 'NORMAL')");
+    }
+
+    @Test
+    void ledgerFiltersAndCountsBeforePagination() {
+        String requestId = requestId();
+        String accountId = accounts.open(CUSTOMER, new OpenRequest("CNY", requestId), requestId).accountId();
+        LocalDateTime timestamp = LocalDateTime.of(2026, 11, 19, 12, 0);
+        for (int i = 0; i < 101; i++) {
+            String tradeNo = trade(accountId, CUSTOMER.identityId(), "DEPOSIT", "SUCCESS");
+            jdbc.update("INSERT INTO transaction_flow (entry_id, trade_no, account_id, entry_role, direction, "
+                            + "amount, book_balance_after, created_at) VALUES (?, ?, ?, 'DEPOSIT_IN', 'CREDIT', ?, 500, ?)",
+                    "ledger-page-" + i, tradeNo, accountId, new BigDecimal("125.00"), timestamp);
+        }
+        String external = trade(accountId, CUSTOMER.identityId(), "EXTERNAL_TRANSFER", "SUCCESS");
+        jdbc.update("INSERT INTO transaction_flow (entry_id, trade_no, account_id, entry_role, direction, "
+                        + "amount, book_balance_after, created_at) VALUES "
+                        + "('outgoing-entry', ?, ?, 'TRANSFER_OUT', 'DEBIT', 125, 375, ?)",
+                external, accountId, timestamp);
+        var query = new FundEntryFilter(OffsetDateTime.parse("2026-11-19T12:00:00+08:00"),
+                OffsetDateTime.parse("2026-11-19T12:00:00+08:00"), null, "125.00", "125.00", "DEPOSIT", "CREDIT");
+        var deposits = accounts.fundEntries(CUSTOMER, accountId, 2, 100, query, null);
+        assertThat(deposits.total()).isEqualTo(101);
+        assertThat(deposits.items()).singleElement().satisfies(entry -> {
+            assertThat(entry.entryId()).isEqualTo("ledger-page-0");
+            assertThat(entry.businessType()).isEqualTo("DEPOSIT");
+            assertThat(entry.amount()).isEqualTo("125.00");
+        });
+        var externalOnly = new FundEntryFilter(null, null, null, null, null, "EXTERNAL_TRANSFER", "DEBIT");
+        assertThat(accounts.fundEntries(CUSTOMER, accountId, 1, 20, externalOnly, null).items())
+                .extracting(FundEntryView::tradeNo).containsExactly(external);
+        var invalidBounds = new FundEntryFilter(null, null, null, "150.00", "100.00", null, null);
+        assertError(() -> accounts.fundEntries(CUSTOMER, accountId, 1, 20, invalidBounds, null),
+                ErrorCode.INVALID_ARGUMENT);
+        assertError(() -> accounts.fundEntries(OTHER, accountId, 1, 20, query, null),
+                ErrorCode.ACCOUNT_NOT_FOUND);
     }
 
     @Test
