@@ -150,6 +150,14 @@ class DepositApiTest {
                 .andExpect(jsonPath("$.data.status").value("SUCCESS"))
                 .andExpect(jsonPath("$.data.businessType").value("DEPOSIT"))
                 .andExpect(jsonPath("$.data.amount").value("100.00"));
+        mockMvc.perform(get("/api/v1/transactions/by-request").param("requestId", REQUEST)
+                        .param("businessType", "DEPOSIT").header("Authorization", "Bearer " + TOKEN))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.tradeNo").value(tradeNo(result)));
+        mockMvc.perform(get("/api/v1/transactions/by-request").param("requestId", REQUEST)
+                        .param("businessType", "WITHDRAWAL").header("Authorization", "Bearer " + TOKEN))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("TRADE_NOT_FOUND"));
     }
 
     @Test

@@ -10,6 +10,7 @@ import com.digitalbank.transaction.dto.TransactionDtos.TradeSummary;
 import com.digitalbank.transaction.security.Actor;
 import com.digitalbank.transaction.security.TransactionAccess;
 import com.digitalbank.transaction.support.Money;
+import com.digitalbank.transaction.support.RequestIds;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -24,6 +25,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class TradeQueryService {
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
+    private static final Set<String> CUSTOMER_TRADE_TYPES =
+            Set.of("DEPOSIT", "WITHDRAWAL", "INTERNAL_TRANSFER", "EXTERNAL_TRANSFER");
     private static final Set<String> STATUSES = Set.of("ACCEPTED", "PROCESSING", "UNKNOWN",
             "SUCCESS", "RECOVERING", "FAILED", "REJECTED");
     /** 待人工处理三态：PENDING 查询别名与具体状态逗号分隔均映射到这组库内字面量。 */
@@ -49,6 +52,22 @@ public class TradeQueryService {
         }
         return new TradeDetailView(row.tradeNo(), row.businessType(), row.status(),
                 Money.format(row.amount()), row.failureReason(), row.accountId());
+    }
+
+    public TradeDetailView byRequest(Actor actor, String businessType, String requestId) {
+        if (access.isBackOffice(actor)) {
+            throw new BizException(ErrorCode.FORBIDDEN, "仅交易发起人能按请求号定位原交易");
+        }
+        if (!CUSTOMER_TRADE_TYPES.contains(businessType)) {
+            throw new BizException(ErrorCode.INVALID_ARGUMENT, "交易类型不合法");
+        }
+        String originalRequestId = RequestIds.resolve(requestId, null);
+        return jdbc.query("SELECT trade_no, business_type, status, amount, failure_reason, account_id "
+                        + "FROM `transaction` WHERE identity_id = ? AND business_type = ? AND request_id = ?",
+                (rs, n) -> new TradeDetailView(rs.getString("trade_no"), rs.getString("business_type"),
+                        rs.getString("status"), Money.format(rs.getBigDecimal("amount")), rs.getString("failure_reason"),
+                        rs.getString("account_id")), actor.identityId(), businessType, originalRequestId)
+                .stream().findFirst().orElseThrow(() -> new BizException(ErrorCode.TRADE_NOT_FOUND, "交易不存在"));
     }
 
     /**
