@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS `transaction` (
     amount DECIMAL(18,2) NOT NULL,
     currency CHAR(3) NOT NULL DEFAULT 'CNY',
     status VARCHAR(16) NOT NULL DEFAULT 'ACCEPTED',
+    accepted_at DATETIME,
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT uk_transaction_trade_no UNIQUE (trade_no),
     CONSTRAINT fk_transaction_account FOREIGN KEY (account_id) REFERENCES account (account_id)

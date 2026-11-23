@@ -49,7 +49,8 @@ INSERT INTO account_status_log (account_id, previous_status, new_status, change_
 
 INSERT INTO risk_rule (rule_id, rule_type, deposit_single_limit, outgoing_single_limit, outgoing_daily_limit, enabled, rule_version) VALUES
   ('RK-01', 'ACCOUNT_STATUS', NULL,    NULL,    NULL,    1, 1),
-  ('RK-02', 'LIMIT_POLICY',   50000.00, 10000.00, 50000.00, 1, 1)
+  ('RK-02', 'LIMIT_POLICY',   50000.00, 10000.00, 50000.00, 1, 1),
+  ('RK-06', 'FREQUENCY_MONITOR', NULL, NULL, NULL, 1, 1)
 ON DUPLICATE KEY UPDATE
   rule_type = VALUES(rule_type), deposit_single_limit = VALUES(deposit_single_limit),
   outgoing_single_limit = VALUES(outgoing_single_limit), outgoing_daily_limit = VALUES(outgoing_daily_limit),

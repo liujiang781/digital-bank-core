@@ -141,6 +141,7 @@ CREATE TABLE `transaction` (
     UNIQUE KEY uk_transaction_request (identity_id, business_type, request_id),
     KEY idx_transaction_request_lookup (request_id),
     KEY idx_transaction_account_created (account_id, created_at),
+    KEY idx_transaction_accepted_account (accepted_at, account_id),
     KEY idx_transaction_status (status),
     CONSTRAINT fk_transaction_account FOREIGN KEY (account_id) REFERENCES account (account_id),
     CONSTRAINT chk_transaction_amount CHECK (amount > 0 OR (business_type = 'ACCOUNT_OPEN' AND amount = 0)),
@@ -219,8 +220,8 @@ CREATE TABLE transfer_order (
 
 CREATE TABLE risk_rule (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-    rule_id VARCHAR(32) NOT NULL COMMENT '规则标识(RK-01 账户状态, RK-02 限额策略)',
-    rule_type VARCHAR(24) NOT NULL COMMENT '规则类型: LIMIT_POLICY/ACCOUNT_STATUS',
+    rule_id VARCHAR(32) NOT NULL COMMENT '规则标识(RK-01 账户状态, RK-02 限额策略, RK-06 高频出账)',
+    rule_type VARCHAR(24) NOT NULL COMMENT '规则类型: LIMIT_POLICY/ACCOUNT_STATUS/FREQUENCY_MONITOR',
     deposit_single_limit DECIMAL(18,2) DEFAULT NULL COMMENT '存款单笔限额',
     outgoing_single_limit DECIMAL(18,2) DEFAULT NULL COMMENT '出账单笔限额',
     outgoing_daily_limit DECIMAL(18,2) DEFAULT NULL COMMENT '出账日累计限额',
@@ -232,7 +233,7 @@ CREATE TABLE risk_rule (
     PRIMARY KEY (id),
     UNIQUE KEY uk_risk_rule_rule_id (rule_id),
     KEY idx_risk_rule_type_enabled (rule_type, enabled),
-    CONSTRAINT chk_risk_rule_type CHECK (rule_type IN ('LIMIT_POLICY', 'ACCOUNT_STATUS')),
+    CONSTRAINT chk_risk_rule_type CHECK (rule_type IN ('LIMIT_POLICY', 'ACCOUNT_STATUS', 'FREQUENCY_MONITOR')),
     CONSTRAINT chk_risk_rule_enabled CHECK (enabled IN (0, 1)),
     CONSTRAINT chk_risk_rule_version CHECK (rule_version > 0),
     CONSTRAINT chk_risk_rule_limits_positive CHECK (
@@ -246,7 +247,7 @@ CREATE TABLE risk_rule (
             AND outgoing_single_limit IS NOT NULL
             AND outgoing_daily_limit IS NOT NULL)
         OR
-        (rule_type = 'ACCOUNT_STATUS'
+        (rule_type IN ('ACCOUNT_STATUS', 'FREQUENCY_MONITOR')
             AND deposit_single_limit IS NULL
             AND outgoing_single_limit IS NULL
             AND outgoing_daily_limit IS NULL)
@@ -256,12 +257,12 @@ CREATE TABLE risk_rule (
 CREATE TABLE risk_event (
     id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT COMMENT '主键ID',
     event_id VARCHAR(32) NOT NULL COMMENT '事件标识(全局唯一)',
-    trade_no VARCHAR(32) NOT NULL COMMENT '被拦截交易流水号',
+    trade_no VARCHAR(32) NOT NULL COMMENT '关联交易流水号',
     rule_id VARCHAR(32) NOT NULL COMMENT '命中规则标识',
     rule_version INT NOT NULL COMMENT '命中时的规则版本',
     operator_identity_id VARCHAR(64) NOT NULL COMMENT '操作身份(SYSTEM 或人工)',
-    reason_code VARCHAR(32) NOT NULL COMMENT '原因码: ACCOUNT_STATUS/SINGLE_LIMIT/DAILY_LIMIT',
-    result VARCHAR(16) NOT NULL COMMENT '判定结果: PASS/REJECT',
+    reason_code VARCHAR(32) NOT NULL COMMENT '原因码: ACCOUNT_STATUS/SINGLE_LIMIT/DAILY_LIMIT/HIGH_FREQUENCY',
+    result VARCHAR(16) NOT NULL COMMENT '判定结果: PASS/REJECT/MARK',
     created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '命中时间(对应 occurred_at)',
     updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间(只追加表不更新)',
     version INT UNSIGNED NOT NULL DEFAULT 1 COMMENT '版本号(形式保留)',
@@ -271,8 +272,8 @@ CREATE TABLE risk_event (
     KEY idx_risk_event_rule_created (rule_id, created_at),
     CONSTRAINT fk_risk_event_transaction FOREIGN KEY (trade_no) REFERENCES `transaction` (trade_no),
     CONSTRAINT fk_risk_event_rule FOREIGN KEY (rule_id) REFERENCES risk_rule (rule_id),
-    CONSTRAINT chk_risk_event_result CHECK (result IN ('PASS', 'REJECT')),
-    CONSTRAINT chk_risk_event_reason CHECK (reason_code IN ('ACCOUNT_STATUS', 'SINGLE_LIMIT', 'DAILY_LIMIT')),
+    CONSTRAINT chk_risk_event_result CHECK (result IN ('PASS', 'REJECT', 'MARK')),
+    CONSTRAINT chk_risk_event_reason CHECK (reason_code IN ('ACCOUNT_STATUS', 'SINGLE_LIMIT', 'DAILY_LIMIT', 'HIGH_FREQUENCY')),
     CONSTRAINT chk_risk_event_rule_version CHECK (rule_version > 0)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='风险事件表';
 

@@ -75,8 +75,8 @@ public class RuleChangeService {
         String outgoing = body.outgoingSingleLimit() == null ? decimal(rule.outgoing()) : positive(body.outgoingSingleLimit(), "outgoingSingleLimit");
         String daily = body.outgoingDailyLimit() == null ? decimal(rule.daily()) : positive(body.outgoingDailyLimit(), "outgoingDailyLimit");
         boolean enabled = body.enabled() == null ? rule.enabled() : body.enabled();
-        if ("ACCOUNT_STATUS".equals(rule.ruleType()) && enabled && deposit != null) {
-            // 账户状态规则不应携带限额；保持原样即可，不额外拒绝，避免误伤历史数据。
+        if (!"LIMIT_POLICY".equals(rule.ruleType()) && (deposit != null || outgoing != null || daily != null)) {
+            throw new BizException(ErrorCode.INVALID_ARGUMENT, "此规则不接受金额限额参数");
         }
         if ("LIMIT_POLICY".equals(rule.ruleType()) && (deposit == null || outgoing == null || daily == null)) {
             throw new BizException(ErrorCode.INVALID_ARGUMENT, "限额策略必须提供三项限额值");

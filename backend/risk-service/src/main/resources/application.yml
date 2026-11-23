@@ -30,3 +30,7 @@ logging:
 risk:
   # 保护风控内部求值端点；为空时关闭内部访问
   internal-token: ${RISK_INTERNAL_TOKEN:}
+  frequency:
+    threshold: ${RISK_FREQUENCY_THRESHOLD:5}
+    window-seconds: ${RISK_FREQUENCY_WINDOW_SECONDS:60}
+    poll-ms: ${RISK_FREQUENCY_POLL_MS:5000}
