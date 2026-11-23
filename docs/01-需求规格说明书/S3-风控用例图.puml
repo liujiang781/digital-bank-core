@@ -1,0 +1,26 @@
+@startuml
+left to right direction
+skinparam defaultFontName Microsoft YaHei
+skinparam monochrome true
+skinparam shadowing false
+
+actor "风控专员\nACT-R" as Risk
+actor "授权审批人\nACT-RM" as Reviewer
+actor "运营人员\nACT-O" as Reader
+
+rectangle "数字银行核心业务模拟系统 / 风控模块" {
+  usecase "UC-RK-01\n配置风控规则" as Rules
+  usecase "UC-RK-02\n维护风险名单" as Lists
+  usecase "UC-RK-03\n处置风险告警" as Alerts
+  usecase "UC-RK-04\n查询风险记录" as Events
+}
+
+Risk -- Rules
+Risk -- Lists
+Risk -- Alerts
+Risk -- Events
+Reviewer -- Rules
+Reviewer -- Lists
+Reader -- Events
+
+@enduml
