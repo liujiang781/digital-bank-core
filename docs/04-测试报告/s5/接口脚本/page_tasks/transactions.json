@@ -1,0 +1,27 @@
+{
+  "url": "http://127.0.0.1:5173/login",
+  "variables": ["S5_USER", "S5_PASS"],
+  "steps": [
+    { "action": "wait", "selector": "input[type='password']" },
+    { "action": "fill", "selector": "input[placeholder*='身份标识']", "value": "{{S5_USER}}" },
+    { "action": "fill", "selector": "input[type='password']", "value": "{{S5_PASS}}" },
+    { "action": "click", "selector": "button:has-text('登 录')" },
+    { "action": "wait", "selector": ".el-menu", "timeout": 10000 },
+
+    { "action": "goto", "url": "http://127.0.0.1:5173/transactions" },
+    { "action": "wait", "selector": ".el-table", "timeout": 12000 },
+    { "action": "extract", "selector": "body", "schema": {
+        "交易记录标题": "text:h2",
+        "页签": "text:.el-tabs__header",
+        "列表首行": "text:.el-table__row:first-child",
+        "列表行数": "text:.el-pagination__total"
+    } },
+    { "action": "screenshot", "file": "D:/AAA编程/软件工程/digital-bank-core/docs/04-测试报告/s5/证据/2026-11-23/补测/ui-transactions-list.png" },
+
+    { "action": "click", "selector": ".el-tabs__item:has-text('我收到的款项')" },
+    { "action": "wait", "selector": ".el-table", "timeout": 12000 },
+    { "action": "extract", "selector": "body", "schema": { "收款列表首行": "text:.el-table__row:first-child" } },
+    { "action": "screenshot", "file": "D:/AAA编程/软件工程/digital-bank-core/docs/04-测试报告/s5/证据/2026-11-23/补测/ui-transactions-received.png" }
+  ],
+  "output": { "file": "D:/AAA编程/软件工程/digital-bank-core/docs/04-测试报告/s5/证据/2026-11-23/补测/ui-transactions.json" }
+}

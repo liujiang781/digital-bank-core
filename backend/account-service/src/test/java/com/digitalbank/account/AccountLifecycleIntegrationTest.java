@@ -302,13 +302,23 @@ class AccountLifecycleIntegrationTest {
         assertThat(balance.bookBalance()).isEqualTo("100.00");
         assertThat(balance.reservedAmount()).isEqualTo("35.25");
         assertThat(balance.availableBalance()).isEqualTo("64.75");
-        assertThat(accounts.list(CUSTOMER, 1, 20, null).items()).extracting(AccountView::accountId).containsExactly(own);
+        // 「我的账户」只返回本人账户，后台授权范围账户不再并进来。
+        assertThat(accounts.list(CUSTOMER, 1, 20).items()).extracting(AccountView::accountId).containsExactly(own);
         Actor scoped = staff("operations-1", "OPERATIONS", other);
-        assertThat(accounts.list(scoped, 1, 20, "运营核查").items()).extracting(AccountView::accountId).containsExactly(other);
+        assertThat(accounts.list(scoped, 1, 20).items()).isEmpty();
         Actor wildcard = staff("operations-2", "OPERATIONS", "*");
-        assertThat(accounts.list(wildcard, 1, 20, "运营核查").items()).isEmpty();
-        assertError(() -> accounts.list(CUSTOMER, 0, 20, null), ErrorCode.INVALID_ARGUMENT);
-        assertError(() -> accounts.list(CUSTOMER, 1, 101, null), ErrorCode.INVALID_ARGUMENT);
+        assertThat(accounts.list(wildcard, 1, 20).items()).isEmpty();
+        // 后台按授权范围查账户改走独立接口：必须带查询原因，客户调用被拒，查询写审计。
+        assertError(() -> accounts.scoped(scoped, 1, 20, " "), ErrorCode.INVALID_ARGUMENT);
+        assertError(() -> accounts.scoped(CUSTOMER, 1, 20, "核查"), ErrorCode.FORBIDDEN);
+        assertThat(accounts.scoped(scoped, 1, 20, "  核查授权账户  ").items())
+                .extracting(AccountView::accountId).containsExactly(other);
+        assertThat(accounts.scoped(wildcard, 1, 20, "核查通配范围").items()).isEmpty();
+        assertThat(jdbc.queryForList("SELECT reason FROM audit_log WHERE action = 'BACKOFFICE_ACCOUNTS_QUERY' "
+                + "AND operator_identity_id = ?", String.class, scoped.identityId()))
+                .containsExactly("核查授权账户");
+        assertError(() -> accounts.list(CUSTOMER, 0, 20), ErrorCode.INVALID_ARGUMENT);
+        assertError(() -> accounts.list(CUSTOMER, 1, 101), ErrorCode.INVALID_ARGUMENT);
     }
 
     @Test
@@ -321,7 +331,6 @@ class AccountLifecycleIntegrationTest {
         assertError(() -> accounts.get(ops, accountId, " "), ErrorCode.INVALID_ARGUMENT);
         assertError(() -> accounts.balance(ops, accountId, null), ErrorCode.INVALID_ARGUMENT);
         assertError(() -> accounts.operations(ops, accountId, 1, 20, null, null, null), ErrorCode.INVALID_ARGUMENT);
-        assertError(() -> accounts.list(ops, 1, 20, null), ErrorCode.INVALID_ARGUMENT);
 
         assertError(() -> accounts.get(outside, accountId, "核查"), ErrorCode.FORBIDDEN);
         assertError(() -> accounts.balance(outside, accountId, "核查"), ErrorCode.FORBIDDEN);
@@ -329,20 +338,17 @@ class AccountLifecycleIntegrationTest {
         assertThat(accounts.get(ops, accountId, " 核对账户 ").status()).isEqualTo("ACTIVE");
         assertThat(accounts.balance(ops, accountId, " 核对余额 ").bookBalance()).isEqualTo("0.00");
         assertThat(accounts.operations(ops, accountId, 1, 20, null, null, " 核对操作 ").items()).isNotEmpty();
-        assertThat(accounts.list(ops, 1, 20, " 核对清单 ").items()).extracting(AccountView::accountId)
-                .containsExactly(accountId);
 
         assertThat(jdbc.queryForList("SELECT action FROM audit_log WHERE operator_identity_id = ? "
-                + "AND action IN ('ACCOUNT_GET_QUERY','ACCOUNT_BALANCE_QUERY','ACCOUNT_OPERATIONS_QUERY','ACCOUNT_LIST_QUERY') "
+                + "AND action IN ('ACCOUNT_GET_QUERY','ACCOUNT_BALANCE_QUERY','ACCOUNT_OPERATIONS_QUERY') "
                 + "ORDER BY id", String.class, ops.identityId()))
-                .containsExactly("ACCOUNT_GET_QUERY", "ACCOUNT_BALANCE_QUERY", "ACCOUNT_OPERATIONS_QUERY",
-                        "ACCOUNT_LIST_QUERY");
+                .containsExactly("ACCOUNT_GET_QUERY", "ACCOUNT_BALANCE_QUERY", "ACCOUNT_OPERATIONS_QUERY");
         assertThat(jdbc.queryForList("SELECT reason FROM audit_log WHERE action = 'ACCOUNT_GET_QUERY' "
                 + "AND operator_identity_id = ?", String.class, ops.identityId())).containsExactly("核对账户");
 
         assertThat(accounts.get(CUSTOMER, accountId, null).status()).isEqualTo("ACTIVE");
         assertThat(jdbc.queryForList("SELECT action FROM audit_log WHERE operator_identity_id = ? AND action IN "
-                + "('ACCOUNT_GET_QUERY','ACCOUNT_BALANCE_QUERY','ACCOUNT_OPERATIONS_QUERY','ACCOUNT_LIST_QUERY')",
+                + "('ACCOUNT_GET_QUERY','ACCOUNT_BALANCE_QUERY','ACCOUNT_OPERATIONS_QUERY')",
                 String.class, CUSTOMER.identityId())).isEmpty();
     }
 
@@ -373,7 +379,7 @@ class AccountLifecycleIntegrationTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.code").value("SUCCEEDED"))
                 .andExpect(jsonPath("$.traceId").value("lifecycle-contract"))
                 .andExpect(jsonPath("$.data.bookBalance").value("0.00"));
-        String accountId = accounts.list(CUSTOMER, 1, 20, null).items().getFirst().accountId();
+        String accountId = accounts.list(CUSTOMER, 1, 20).items().getFirst().accountId();
 
         mvc.perform(post("/api/v1/accounts/{id}/limits", accountId)
                         .header("Authorization", SessionVerifierTestConfiguration.LIFECYCLE_AUTHORIZATION)

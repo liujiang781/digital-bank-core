@@ -89,39 +89,64 @@ public class AccountService {
     }
 
     @Transactional(readOnly = true)
-    public Page<AccountView> list(Actor actor, int page, int pageSize, String reason) {
+    public Page<AccountView> list(Actor actor, int page, int pageSize) {
         pagination(page, pageSize);
-        boolean staff = isBackOffice(actor);
-        if (staff) reason = text(reason, "查询原因");
+        // 「我的账户」只返回本人名下账户。后台按授权范围查账户改走独立接口 scoped()：
+        // 后台查询是审计动作，必须带查询原因，不能和客户的个人账户列表混在一起。
         List<Object> args = new ArrayList<>();
         String condition = null;
         if (actor.customerId() != null && !actor.customerId().isBlank()) {
             condition = "customer_id = ?";
             args.add(actor.customerId());
         }
-        if (staff && !actor.accountScope().isEmpty()) {
-            List<String> scope = actor.accountScope().stream().filter(id -> !"*".equals(id)).sorted().toList();
-            if (!scope.isEmpty()) {
-                String scoped = "account_id IN (" + String.join(",", java.util.Collections.nCopies(scope.size(), "?")) + ")";
-                condition = condition == null ? scoped : "(" + condition + " OR " + scoped + ")";
-                args.addAll(scope);
-            }
-        }
-        Page<AccountView> result;
         if (condition == null) {
-            result = new Page<>(List.of(), 0, page, pageSize);
-        } else {
-            Long count = jdbc.queryForObject("SELECT COUNT(*) FROM account WHERE " + condition, Long.class, args.toArray());
-            List<Object> queryArgs = new ArrayList<>(args);
-            queryArgs.add(pageSize);
-            queryArgs.add((long) (page - 1) * pageSize);
-            List<AccountView> items = jdbc.query("SELECT * FROM account WHERE " + condition
-                            + " ORDER BY created_at DESC, account_id DESC LIMIT ? OFFSET ?", Account::fromRow, queryArgs.toArray())
-                    .stream().map(this::view).toList();
-            result = new Page<>(items, count == null ? 0 : count, page, pageSize);
+            return new Page<>(List.of(), 0, page, pageSize);
         }
-        if (staff) auditScope(actor, "ACCOUNT_LIST_QUERY", reason);
-        return result;
+        Long count = jdbc.queryForObject("SELECT COUNT(*) FROM account WHERE " + condition, Long.class, args.toArray());
+        List<Object> queryArgs = new ArrayList<>(args);
+        queryArgs.add(pageSize);
+        queryArgs.add((long) (page - 1) * pageSize);
+        List<AccountView> items = jdbc.query("SELECT * FROM account WHERE " + condition
+                        + " ORDER BY created_at DESC, account_id DESC LIMIT ? OFFSET ?", Account::fromRow, queryArgs.toArray())
+                .stream().map(this::view).toList();
+        return new Page<>(items, count == null ? 0 : count, page, pageSize);
+    }
+
+    /**
+     * 后台按授权账户范围查账户（独立接口，UC-OP-01 后台查询）。
+     * 只查会话里显式授权的账户，客户本人账户列表不受影响；必须填写查询原因并写审计。
+     * "*" 通配标记不展开为全表，避免一次查询意外暴露所有账户。
+     * 这里用普通事务而非 readOnly：MySQL 会拒绝只读连接里的 audit_log 写入
+     * （Connection is read-only），与 fundEntries() 保持一致。
+     */
+    @Transactional
+    public Page<AccountView> scoped(Actor actor, int page, int pageSize, String reason) {
+        pagination(page, pageSize);
+        if (!isBackOffice(actor)) {
+            throw error(ErrorCode.FORBIDDEN, "仅运营或风控身份可以按授权范围查询账户");
+        }
+        String queryReason = text(reason, "查询原因");
+        List<String> scope = actor.accountScope().stream()
+                .filter(id -> id != null && !id.isBlank() && !"*".equals(id))
+                .distinct().sorted().toList();
+        if (scope.isEmpty()) {
+            audit(actor, "BACKOFFICE_ACCOUNTS_QUERY", "SCOPE_EMPTY", queryReason, null);
+            return new Page<>(List.of(), 0, page, pageSize);
+        }
+        String placeholders = String.join(",", java.util.Collections.nCopies(scope.size(), "?"));
+        List<Object> args = new ArrayList<>(scope);
+        Long count = jdbc.queryForObject("SELECT COUNT(*) FROM account WHERE account_id IN (" + placeholders + ")",
+                Long.class, args.toArray());
+        List<Object> queryArgs = new ArrayList<>(args);
+        queryArgs.add(pageSize);
+        queryArgs.add((long) (page - 1) * pageSize);
+        List<AccountView> items = jdbc.query("SELECT * FROM account WHERE account_id IN (" + placeholders + ")"
+                        + " ORDER BY created_at DESC, account_id DESC LIMIT ? OFFSET ?", Account::fromRow, queryArgs.toArray())
+                .stream().map(this::view).toList();
+        String scopeRef = String.join(",", scope);
+        if (scopeRef.length() > 64) scopeRef = scopeRef.substring(0, 64);
+        audit(actor, "BACKOFFICE_ACCOUNTS_QUERY", scopeRef, queryReason, null);
+        return new Page<>(items, count == null ? 0 : count, page, pageSize);
     }
 
     @Transactional(readOnly = true)
@@ -397,11 +422,6 @@ public class AccountService {
     private void audit(Actor actor, String action, String accountId, String reason, String tradeNo) {
         jdbc.update("INSERT INTO audit_log (operator_identity_id, `action`, target_type, target_ref, reason, result, trade_no) "
                 + "VALUES (?, ?, 'account', ?, ?, 'SUCCESS', ?)", actor.identityId(), action, accountId, bounded(reason), tradeNo);
-    }
-
-    private void auditScope(Actor actor, String action, String reason) {
-        jdbc.update("INSERT INTO audit_log (operator_identity_id, `action`, target_type, target_ref, reason, result) "
-                + "VALUES (?, ?, 'account_scope', NULL, ?, 'SUCCESS')", actor.identityId(), action, bounded(reason));
     }
 
     private <T> Page<T> queryPage(String table, String filter, List<Object> args, int page, int pageSize,

@@ -1,0 +1,34 @@
+{
+  "url": "http://127.0.0.1:5173/login",
+  "variables": ["S5_USER", "S5_PASS"],
+  "steps": [
+    { "action": "wait", "selector": "input[type='password']" },
+    { "action": "fill", "selector": "input[placeholder*='身份标识']", "value": "{{S5_USER}}" },
+    { "action": "fill", "selector": "input[type='password']", "value": "{{S5_PASS}}" },
+    { "action": "click", "selector": "button:has-text('登 录')" },
+    { "action": "wait", "selector": ".el-menu", "timeout": 10000 },
+    { "action": "extract", "selector": "body", "schema": { "风控账号导航": "text:.el-menu" } },
+
+    { "action": "goto", "url": "http://127.0.0.1:5173/risk" },
+    { "action": "wait", "selector": "h2.page-title", "timeout": 12000 },
+    { "action": "extract", "selector": "body", "schema": {
+        "风控页标题": "text:h2",
+        "页签": "text:.el-tabs__header",
+        "规则表首行": "text:.el-tab-pane:not([style*='display: none']) .el-table__row:first-child"
+    } },
+    { "action": "screenshot", "file": "D:/AAA编程/软件工程/digital-bank-core/docs/04-测试报告/s5/证据/2026-11-23/补测/ui-risk-rules.png" },
+
+    { "action": "click", "selector": ".el-tabs__item:has-text('变更审批')" },
+    { "action": "extract", "selector": "body", "schema": { "当前页签": "text:.el-tabs__item.is-active" } },
+    { "action": "screenshot", "file": "D:/AAA编程/软件工程/digital-bank-core/docs/04-测试报告/s5/证据/2026-11-23/补测/ui-risk-changes.png" },
+
+    { "action": "click", "selector": ".el-tabs__item:has-text('风险名单')" },
+    { "action": "extract", "selector": "body", "schema": { "名单页签": "text:.el-tabs__item.is-active" } },
+    { "action": "screenshot", "file": "D:/AAA编程/软件工程/digital-bank-core/docs/04-测试报告/s5/证据/2026-11-23/补测/ui-risk-lists.png" },
+
+    { "action": "click", "selector": ".el-tabs__item:has-text('冻结解除审批')" },
+    { "action": "extract", "selector": "body", "schema": { "解除页签": "text:.el-tabs__item.is-active" } },
+    { "action": "screenshot", "file": "D:/AAA编程/软件工程/digital-bank-core/docs/04-测试报告/s5/证据/2026-11-23/补测/ui-risk-release.png" }
+  ],
+  "output": { "file": "D:/AAA编程/软件工程/digital-bank-core/docs/04-测试报告/s5/证据/2026-11-23/补测/ui-risk.json" }
+}
