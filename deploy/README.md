@@ -10,7 +10,7 @@ deploy/
 ├── .env.example              # 环境变量模板，复制为 .env 后填写，.env 不进仓库
 ├── docker-compose.dev.yml    # 本地依赖：MySQL 8.0.36 + Redis 7（可选）
 ├── sql/
-│   ├── schema.sql            # 16 张表 DDL，可重复执行（会 DROP 后重建）
+│   ├── schema.sql            # 21 张表 DDL，可重复执行（会 DROP 后重建）
 │   ├── init-data.sql         # 演示数据，幂等
 │   ├── verify.sql            # 验收脚本，幂等，需 mysql -f 执行
 │   └── set-demo-password.sh  # 运行时生成 BCrypt 哈希并写入三个演示账号
@@ -41,7 +41,7 @@ docker compose -f deploy/docker-compose.dev.yml --profile optional up -d redis
 
 Compose 已将 `schema.sql`、`init-data.sql` 挂载到 `/docker-entrypoint-initdb.d/`，首次启动自动执行。
 
-> MySQL 必须 8.0.16 及以上 CHECK 约束才生效；8.0.13 只能靠应用层校验。
+> MySQL 必须 8.0.16 及以上 CHECK 约束才生效；本机已于 2026-11-19 升级到 8.0.46，实测 48 条 CHECK 生效。
 
 ## 3. 演示登录口令
 
@@ -96,14 +96,19 @@ GRANT LOCK TABLES ON payment_db.*          TO 'account_service'@'%';
 
 GRANT SELECT, INSERT, UPDATE ON payment_db.`transaction`          TO 'transaction_service'@'%';
 GRANT SELECT, INSERT, UPDATE ON payment_db.mock_channel_deposit   TO 'transaction_service'@'%';
-GRANT SELECT, INSERT ON payment_db.transfer_order TO 'transaction_service'@'%';
-GRANT SELECT ON payment_db.account            TO 'transaction_service'@'%';
+GRANT SELECT, INSERT         ON payment_db.transfer_order         TO 'transaction_service'@'%';
+GRANT SELECT                 ON payment_db.account                TO 'transaction_service'@'%';
 GRANT SELECT ON payment_db.account_reservation TO 'transaction_service'@'%';
 GRANT SELECT, INSERT, UPDATE ON payment_db.trade_manual_action TO 'transaction_service'@'%';
 GRANT SELECT, INSERT ON payment_db.audit_log TO 'transaction_service'@'%';
 
-GRANT SELECT, INSERT, UPDATE ON payment_db.risk_rule      TO 'risk_service'@'%';
-GRANT SELECT, INSERT         ON payment_db.risk_event     TO 'risk_service'@'%';
+GRANT SELECT, INSERT, UPDATE         ON payment_db.risk_rule             TO 'risk_service'@'%';
+GRANT SELECT, INSERT                 ON payment_db.risk_event            TO 'risk_service'@'%';
+GRANT SELECT, INSERT                 ON payment_db.risk_alert_disposal   TO 'risk_service'@'%';
+GRANT SELECT, INSERT, UPDATE         ON payment_db.risk_change_request   TO 'risk_service'@'%';
+GRANT SELECT, INSERT                 ON payment_db.risk_change_approval  TO 'risk_service'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE ON payment_db.risk_list_entry       TO 'risk_service'@'%';
+GRANT SELECT, INSERT                 ON payment_db.audit_log             TO 'risk_service'@'%';
 GRANT SELECT ON payment_db.account     TO 'risk_service'@'%';
 GRANT SELECT ON payment_db.account_status_log TO 'risk_service'@'%';
 GRANT SELECT, INSERT ON payment_db.risk_freeze_release TO 'risk_service'@'%';
@@ -237,7 +242,7 @@ powershell -ExecutionPolicy Bypass -File deploy/scripts/backup-restore.ps1 -Mode
 ## S1 增量（来自 main）
 
 - 已有数据库升级只需执行 `deploy/sql/s1-incremental.sql`，不要重跑会清库的 `schema.sql` / `init-data.sql`
-- `schema.sql` 当前为 16 张表、16 条外键（S1 新增 `user_command`、`staff_authorization`、`staff_account_scope`）
+- `schema.sql` 当前为 21 张表、16 条外键、48 条 CHECK（基线 13 + S1 新增 `user_command`/`staff_authorization`/`staff_account_scope` + S3 新增 5 张风控与人工动作表）
 - 管理员与员工认证样例见 `auth-admin.example.yml`、`auth-staff.example.yml`
 - S1 接口与授权说明见 `docs/04-测试报告/s1/S1-用户管理接口交接.md`
 

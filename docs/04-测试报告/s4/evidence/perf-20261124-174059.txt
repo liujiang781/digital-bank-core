@@ -1,0 +1,8 @@
+﻿=== S4 perf test 20261124-174059 ===
+target=http://localhost:8085 identity=UID-000001 account=ACC_S2_001
+login              n=10   min=327.74   avg=352.55   p50=341.19   p95=392.44   p99=392.44   max=392.44
+balance            n=200  min=36.32    avg=47.2     p50=45.93    p95=58.46    p99=69.9     max=79.46
+transaction_list   n=200  min=36.02    avg=48.4     p50=46.87    p95=65.94    p99=74.97    max=84.07
+deposit            n=20   min=119.51   avg=131.41   p50=127.66   p95=148.35   p99=153.62   max=153.62
+deposit_ok=20 / 20 amount_each=1.00
+NOTE: single host, Windows, DriverManagerDataSource (no pool) -> for trend, not benchmark.

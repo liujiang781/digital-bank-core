@@ -67,6 +67,11 @@ GRANT SELECT, INSERT ON payment_db.audit_log TO 'transaction_service'@'%';
 
 GRANT SELECT, INSERT, UPDATE ON payment_db.risk_rule TO 'risk_service'@'%';
 GRANT SELECT, INSERT ON payment_db.risk_event TO 'risk_service'@'%';
+GRANT SELECT, INSERT ON payment_db.risk_alert_disposal TO 'risk_service'@'%';
+GRANT SELECT, INSERT, UPDATE ON payment_db.risk_change_request TO 'risk_service'@'%';
+GRANT SELECT, INSERT ON payment_db.risk_change_approval TO 'risk_service'@'%';
+GRANT SELECT, INSERT, UPDATE, DELETE ON payment_db.risk_list_entry TO 'risk_service'@'%';
+GRANT SELECT, INSERT ON payment_db.audit_log TO 'risk_service'@'%';
 GRANT SELECT ON payment_db.account TO 'risk_service'@'%';
 GRANT SELECT ON payment_db.account_status_log TO 'risk_service'@'%';
 GRANT SELECT, INSERT ON payment_db.risk_freeze_release TO 'risk_service'@'%';

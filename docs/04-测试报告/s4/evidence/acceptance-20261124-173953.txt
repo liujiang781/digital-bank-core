@@ -1,0 +1,9 @@
+﻿env                                INFO  target=http://127.0.0.1:8085 identity=UID-000001 account=ACC_S2_001 amount=1
+health(5 services)                 PASS  5/5 UP
+login                              PASS  http=200 token_len=43
+balance(before)                    PASS  http=200 book=50012.00
+deposit(first)                     PASS  http=200 status=SUCCESS trade=TRD2026112400E1B31A
+deposit(replay)                    PASS  same_trade=yes trade=TRD2026112400E1B31A
+balance(after)                     PASS  book=50013.00 delta=1.00 expect=1
+transaction_list                   PASS  http=200 total=19 first=TRD2026112400E1B31A
+summary                            DONE  evidence=D:\1-软件工程实验\实验补充\scripts\..\evidence\acceptance-20261124-173953.txt

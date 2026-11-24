@@ -180,37 +180,48 @@ public class RiskListService {
                             + "request_id, request_hash) VALUES (?, ?, ?, ?, ?, ?)",
                     changeId, identity.identityId(), body.decision(), note.isEmpty() ? null : note,
                     requestId, hash);
-            if ("APPROVE".equals(body.decision())) applyList(finalPatch, changeId, identity.identityId());
+            if ("APPROVE".equals(body.decision())) {
+                applyList(finalPatch, changeId, change.submittedBy(), identity.identityId());
+            }
             audit(identity.identityId(), "RISK_LIST_APPROVE", "risk_change_request", changeId, note,
                     "APPROVE".equals(body.decision()) ? "APPLIED" : "REJECTED");
         });
-        Integer version = jdbc.query("SELECT rule_version FROM risk_list_entry WHERE entry_id = ?",
-                (rs, i) -> rs.getInt(1), patch.entryId()).stream().findFirst().orElse(null);
-        return new ListEntryView(patch.entryId(), patch.listType(), patch.subjectType(), patch.subjectId(),
-                patch.reasonCode(), patch.enabled(), version == null ? 0 : version, identity.identityId(),
+        List<java.util.Map<String, Object>> applied = jdbc.queryForList(
+                "SELECT entry_id, rule_version FROM risk_list_entry WHERE list_type = ? AND subject_type = ? "
+                        + "AND subject_id = ?",
+                patch.listType(), patch.subjectType(), patch.subjectId());
+        String resultEntryId = applied.isEmpty() ? patch.entryId() : (String) applied.getFirst().get("entry_id");
+        Integer version = applied.isEmpty() ? null
+                : ((Number) applied.getFirst().get("rule_version")).intValue();
+        return new ListEntryView(resultEntryId, patch.listType(), patch.subjectType(), patch.subjectId(),
+                patch.reasonCode(), patch.enabled(), version == null ? 0 : version, change.submittedBy(),
                 "APPROVE".equals(body.decision()) ? identity.identityId() : null,
                 null, format(LocalDateTime.now(ZONE)));
     }
 
-    private void applyList(ListPatch patch, String changeId, String approver) {
+    /** 应用名单变更：按 (list_type, subject_type, subject_id) 定位条目，避免用本次新 entry_id 删除/插入导致失效。 */
+    private void applyList(ListPatch patch, String changeId, String submitter, String approver) {
         if ("REMOVE".equals(patch.op())) {
-            jdbc.update("DELETE FROM risk_list_entry WHERE entry_id = ?", patch.entryId());
+            jdbc.update("DELETE FROM risk_list_entry WHERE list_type = ? AND subject_type = ? AND subject_id = ?",
+                    patch.listType(), patch.subjectType(), patch.subjectId());
             return;
         }
-        Integer version = jdbc.query("SELECT rule_version FROM risk_list_entry WHERE entry_id = ?",
-                (rs, i) -> rs.getInt(1), patch.entryId()).stream().findFirst().orElse(null);
+        Integer version = jdbc.query("SELECT rule_version FROM risk_list_entry WHERE list_type = ? "
+                        + "AND subject_type = ? AND subject_id = ?",
+                (rs, i) -> rs.getInt(1), patch.listType(), patch.subjectType(), patch.subjectId())
+                .stream().findFirst().orElse(null);
         if (version == null) {
             jdbc.update("INSERT INTO risk_list_entry (entry_id, list_type, subject_type, subject_id, reason_code, "
                             + "enabled, rule_version, change_id, created_by, approved_by) "
                             + "VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)",
                     patch.entryId(), patch.listType(), patch.subjectType(), patch.subjectId(), patch.reasonCode(),
-                    patch.enabled() ? 1 : 0, changeId, approver, approver);
+                    patch.enabled() ? 1 : 0, changeId, submitter, approver);
         } else {
-            jdbc.update("UPDATE risk_list_entry SET list_type = ?, subject_type = ?, subject_id = ?, "
-                            + "reason_code = ?, enabled = ?, rule_version = rule_version + 1, change_id = ?, "
-                            + "approved_by = ? WHERE entry_id = ?",
-                    patch.listType(), patch.subjectType(), patch.subjectId(), patch.reasonCode(),
-                    patch.enabled() ? 1 : 0, changeId, approver, patch.entryId());
+            jdbc.update("UPDATE risk_list_entry SET reason_code = ?, enabled = ?, rule_version = rule_version + 1, "
+                            + "change_id = ?, approved_by = ? "
+                            + "WHERE list_type = ? AND subject_type = ? AND subject_id = ?",
+                    patch.reasonCode(), patch.enabled() ? 1 : 0, changeId, approver,
+                    patch.listType(), patch.subjectType(), patch.subjectId());
         }
     }
 

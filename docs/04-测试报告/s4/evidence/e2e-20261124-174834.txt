@@ -1,0 +1,42 @@
+﻿A1   health(5 services)                     PASS 5/5 UP
+B1   login UID-000001                       PASS http=200 roles= token_len=43
+B2   login UID-000002                       PASS http=200 roles=
+B3   login OPS-ADMIN                        PASS http=200 roles=OPERATIONS
+B4   login OPS-RISK                         PASS http=200 roles=RISK
+B8   login RISK-APPROVER                    PASS http=200 roles=RISK
+B5   login wrong password                   PASS http=401
+B6   anonymous access rejected              PASS http=401
+C1   GET /customers/me                      PASS http=200
+C2   GET /customers (ops)                   PASS http=200
+C3   GET /roles (read)                      SKIP service only exposes PUT /roles/{id}
+D7   scoped denied for plain customer       PASS http=403
+D1   GET /accounts/scoped                   PASS http=200 count=1
+D2   GET /accounts/{id}                     PASS http=200 status=ACTIVE
+D3   GET balance (owner)                    PASS http=200 book=50014.00
+D4   balance cross-customer blocked         PASS http=404
+D5   GET /accounts/{id}/operations          PASS http=200
+D6   GET /accounts/{id}/fund-entries        PASS http=200
+E1   deposit 5.00                           PASS http=200 status=SUCCESS trade=TRD20261124993E9337
+E2   deposit idempotent replay              PASS same_trade=yes
+E3   withdrawal 2.00                        PASS http=200 status=SUCCESS trade=TRD20261124A22C26E5
+E4   internal transfer 1.00                 PASS http=200 status=SUCCESS trade=TRD20261124EF5124BF
+E5   transfer from other account blocked    PASS http=404
+E6   GET /transactions/by-request           PASS http=200 trade=TRD20261124993E9337
+E7   GET /transactions/{tradeNo}            PASS http=200
+E8   GET /transactions/{tradeNo}/receipt    PASS http=200 len=490
+E9   GET /transactions (paged)              PASS http=200 total=24
+E10  balance after 3 trades                 PASS book=50016.00 expect=50016.00
+E11  payee balance +1.00                    PASS book=30008.00 expect=30008.00
+F1   GET /risk/rules                        PASS http=200 limitRule=RK-02
+F2   GET /risk/events                       PASS http=200 total=0
+F3   GET /risk/lists                        PASS http=200
+F4   submit list UPSERT                     PASS http=200 subject=ACC_S2_002
+F4b  approve list change (2nd RISK)         PASS http=200 change=CHG-LIST-8FEF7D67257D4B82
+F5   list entry visible after approval      PASS subject=ACC_S2_002 found=True
+F5b  submitter sees own list entry          PASS found=True (DEF-S4-008: created_by overwritten)
+F10  list REMOVE takes effect               PASS http=200 still_enabled=False (DEF-S4-006)
+F6   GET /risk/changes                      PASS http=200
+F7   POST alerts/{id}/dispose               SKIP no risk event in db
+F8   PUT /risk/rules/{id} submit            PASS http=200 change=CHG-RULE-A294C945227844C0
+F9   rule change REJECT by 2nd RISK         PASS http=200 change=CHG-RULE-A294C945227844C0
+SUMMARY total=41 pass=39 fail=0 skip=2 log=D:\1-软件工程实验\实验补充\scripts\..\evidence\e2e-20261124-174834.txt
