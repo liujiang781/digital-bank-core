@@ -1,0 +1,11 @@
+﻿17:12:22 [PASS] precheck :: db=payment_db schema=D:\1-软件工程实验\repo\deploy\sql\schema.sql
+17:12:23 [INFO] baseline-before :: tables=21 customer/account=4	2
+17:12:23 [PASS] backup :: size=56.4KB file=D:\1-软件工程实验\实验补充\scripts\..\evidence\pre-rebuild-20261124-171222.sql
+17:12:24 [PASS] schema :: 0.70s
+17:12:24 [PASS] init-data :: 0.12s
+17:12:24 [PASS] grants :: 0.18s
+17:12:24 [PASS] structure :: tables/fk/check/cols/idx = 22/17/48/216/50
+17:12:24 [INFO] seed-rows :: customer/account/credential/risk_rule = 4/2/4/3
+17:12:24 [PASS] new-table :: risk_freeze_release exists=1
+17:12:24 [INFO] done :: total=1.88s log=D:\1-软件工程实验\实验补充\scripts\..\evidence\provision-20261124-171222.log
+17:12:24 [INFO] credential :: used cnf file: C:\Users\qx137\AppData\Local\Temp\.s4root.cnf (not deleted by this script)
