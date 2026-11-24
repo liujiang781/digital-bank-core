@@ -5,6 +5,7 @@ import com.digitalbank.account.dto.PostingDtos.DepositResult;
 import com.digitalbank.account.dto.PostingDtos.Failure;
 import com.digitalbank.account.dto.PostingDtos.Outcome;
 import com.digitalbank.account.dto.PostingDtos.Release;
+import com.digitalbank.account.dto.PostingDtos.WithdrawalResult;
 import com.digitalbank.account.security.Actor;
 import com.digitalbank.account.service.PostingService;
 import com.digitalbank.common.api.ErrorCode;
@@ -46,8 +47,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class PostingIntegrationTest {
     private static final String INTERNAL_TOKEN = "s2-test-service-token-32-bytes-long";
     private static final String EXTERNAL_RESULTS = "/internal/v1/postings/external-transfer-results";
+    private static final String WITHDRAWAL_RESULTS = "/internal/v1/postings/withdrawal-results";
 
     @Autowired PostingService postings;
+    @Autowired com.digitalbank.account.service.AccountPolicy policy;
     @Autowired JdbcTemplate jdbc;
     @Autowired MockMvc mvc;
 
@@ -186,7 +189,14 @@ class PostingIntegrationTest {
         postings.reserve(command);
         assertMoney("payer", "500.00", "100.00");
         assertThat(flowCount("withdraw-1")).isZero();
-        assertThat(postings.completeWithdrawal(command).status()).isEqualTo("SUCCESS");
+        assertError(ErrorCode.REQUEST_CONFLICT, () -> postings.completeWithdrawal(command));
+        assertThat(postings.recordWithdrawalResult(withdrawalReceipt(
+                "withdraw-1", "100.00", "UNKNOWN", null, "CHANNEL_TIMEOUT")).status()).isEqualTo("UNKNOWN");
+        assertMoney("payer", "500.00", "100.00");
+        var result = withdrawalReceipt("withdraw-1", "100.00", "SUCCESS", "withdraw-evidence", null);
+        postings.recordWithdrawalResult(result);
+        assertThat(postings.finishWithdrawal("withdraw-1").status()).isEqualTo("SUCCESS");
+        assertThat(postings.recordWithdrawalResult(result).status()).isEqualTo("SUCCESS");
         postings.completeWithdrawal(command);
         assertMoney("payer", "400.00", "0.00");
         assertThat(flowCount("withdraw-1")).isEqualTo(1);
@@ -194,15 +204,29 @@ class PostingIntegrationTest {
     }
 
     @Test
-    void releasingOneTradeCannotConsumeAnotherTradesReservation() {
+    void aFailedWithdrawalKeepsItsEvidenceUntilOnlyItsReservationCanBeReleased() throws Exception {
         withdrawal("withdraw-release", "100.00");
         withdrawal("withdraw-other", "30.00");
         postings.reserve(outgoingCommand("withdraw-release", "100.00", null));
         postings.reserve(outgoingCommand("withdraw-other", "30.00", null));
         Release release = new Release("withdraw-release", "payer", "100.00", "CNY",
                 "LOCAL_PROCESSING_FAILED", "LOCAL_FAILURE", "local-failure-1");
-        assertThat(postings.release(release).reservationStatus()).isEqualTo("RELEASED");
-        assertThat(postings.release(release).status()).isEqualTo("FAILED");
+        assertError(ErrorCode.REQUEST_CONFLICT, () -> postings.release(release));
+        String failed = externalReceipt("withdraw-release", "100.00", "FAILED", "channel-failure-1", "CHANNEL_DECLINED");
+        jdbc.execute("ALTER TABLE account_reservation ADD CONSTRAINT test_block_withdrawal_release CHECK (status <> 'RELEASED')");
+        try {
+            internalPost(WITHDRAWAL_RESULTS, failed).andExpect(status().isInternalServerError());
+        } finally {
+            dropCheckConstraint("account_reservation", "test_block_withdrawal_release");
+        }
+        assertThat(tradeStatus("withdraw-release")).isEqualTo("RECOVERING");
+        assertMoney("payer", "500.00", "130.00");
+        internalPost(WITHDRAWAL_RESULTS, externalReceipt("withdraw-release", "100.00", "SUCCESS", "other-evidence", null))
+                .andExpect(status().isConflict());
+        internalPost(WITHDRAWAL_RESULTS, failed).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.reservationStatus").value("RELEASED"));
+        internalPost(WITHDRAWAL_RESULTS, failed).andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("FAILED"));
         assertMoney("payer", "500.00", "30.00");
         assertThat(postings.outcome("withdraw-other").reservationStatus()).isEqualTo("RESERVED");
         assertThat(flowCount("withdraw-release")).isZero();
@@ -313,9 +337,9 @@ class PostingIntegrationTest {
                         + "outgoing_daily_limit, enabled, rule_version) VALUES (?, 'LIMIT_POLICY', 50000.00, "
                         + "1000.00, 150.00, 1, 1)", "daily-policy");
         withdrawal("limit-one", "100.00");
-        withdrawal("limit-two", "100.00");
+        transfer("limit-two", "100.00");
         var commands = List.of(outgoingCommand("limit-one", "100.00", null),
-                outgoingCommand("limit-two", "100.00", null));
+                outgoingCommand("limit-two", "100.00", "payee"));
         List<Outcome> results;
         try (var executor = Executors.newFixedThreadPool(2)) {
             var first = executor.submit(() -> postings.reserve(commands.get(0)));
@@ -340,7 +364,8 @@ class PostingIntegrationTest {
         java.time.LocalDate yesterday = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Shanghai")).minusDays(1);
         jdbc.update("UPDATE `transaction` SET accepted_at = ? WHERE trade_no = 'yesterday'",
                 yesterday.atTime(12, 0));
-        postings.completeWithdrawal(outgoingCommand("yesterday", "100.00", null));
+        postings.recordWithdrawalResult(withdrawalReceipt("yesterday", "100.00", "SUCCESS", "yesterday-proof", null));
+        postings.finishWithdrawal("yesterday");
         withdrawal("today", "100.00");
         assertThat(postings.reserve(outgoingCommand("today", "100.00", null)).status()).isEqualTo("PROCESSING");
         assertMoney("payer", "400.00", "100.00");
@@ -581,6 +606,12 @@ class PostingIntegrationTest {
         String tradeNo = "external-failure";
         externalTransfer(tradeNo, "100.00");
         postings.reserve(outgoingCommand(tradeNo, "100.00", null));
+        assertThat(policy.dailyUsed("payer")).isEqualByComparingTo("100.00");
+        internalPost(EXTERNAL_RESULTS, externalReceipt(tradeNo, "100.00", "UNKNOWN", null, "CHANNEL_TIMEOUT"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.status").value("UNKNOWN"));
+        assertMoney("payer", "500.00", "100.00");
+        assertThat(policy.dailyUsed("payer")).isEqualByComparingTo("100.00");
         String failure = externalReceipt(tradeNo, "100.00", "FAILED", "failure-evidence", "CHANNEL_DECLINED");
         jdbc.execute("ALTER TABLE account_reservation ADD CONSTRAINT test_block_external_release "
                 + "CHECK (status <> 'RELEASED')");
@@ -613,6 +644,7 @@ class PostingIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.status").value("FAILED"));
         assertMoney("payer", "500.00", "0.00");
+        assertThat(policy.dailyUsed("payer")).isEqualByComparingTo("0.00");
         assertThat(flowCount(tradeNo)).isZero();
     }
 
@@ -745,6 +777,11 @@ class PostingIntegrationTest {
     private DepositResult result(String tradeNo, String amount, String status, String evidence, String reason) {
         return new DepositResult(tradeNo, "payer", amount, "CNY", status, "CHD" + tradeNo, evidence,
                 OffsetDateTime.now(java.time.ZoneOffset.ofHours(8)), reason);
+    }
+
+    private WithdrawalResult withdrawalReceipt(String tradeNo, String amount, String status, String evidence, String reason) {
+        return new WithdrawalResult(tradeNo, "payer", amount, "CNY", status, "CHD" + tradeNo, evidence,
+                OffsetDateTime.now(ZoneOffset.ofHours(8)), reason);
     }
 
     private List<Outcome> concurrent(int threads, Callable<Outcome> command) throws Exception {

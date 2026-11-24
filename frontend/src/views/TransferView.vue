@@ -26,6 +26,14 @@ const form = reactive({
   requestId: newRequestId()
 })
 
+function suggestPayeeAccounts(query, callback) {
+  const keyword = query.trim().toLowerCase()
+  callback(accounts.value
+    .filter((account) => account.accountId !== form.payerAccountId
+      && account.accountId.toLowerCase().includes(keyword))
+    .map((account) => ({ value: account.accountId })))
+}
+
 const rules = computed(() => ({
   payerAccountId: [{ required: true, message: '请选择付款账户', trigger: 'change' }],
   payeeAccountId:
@@ -138,21 +146,13 @@ onMounted(async () => {
 
         <template v-if="form.kind === 'INTERNAL'">
           <el-form-item label="收款账户" prop="payeeAccountId">
-            <el-select
+            <el-autocomplete
               v-model="form.payeeAccountId"
-              filterable
-              allow-create
-              default-first-option
+              :fetch-suggestions="suggestPayeeAccounts"
+              clearable
               placeholder="输入本行收款账号，例如 ACC-0002"
               style="width: 100%"
-            >
-              <el-option
-                v-for="acc in accounts.filter((a) => a.accountId !== form.payerAccountId)"
-                :key="acc.accountId"
-                :value="acc.accountId"
-                :label="acc.accountId"
-              />
-            </el-select>
+            />
           </el-form-item>
         </template>
 

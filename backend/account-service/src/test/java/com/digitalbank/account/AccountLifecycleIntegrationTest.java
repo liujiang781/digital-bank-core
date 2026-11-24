@@ -13,6 +13,9 @@ import com.digitalbank.account.service.AccountService;
 import com.digitalbank.common.api.ErrorCode;
 import com.digitalbank.common.exception.BizException;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -53,6 +56,41 @@ class AccountLifecycleIntegrationTest {
                 + "VALUES ('customer-c1', 'identity-c1', '客户一', 'VERIFIED', 'NORMAL')");
         jdbc.update("INSERT INTO customer (customer_id, identity_id, name, real_name_status, status) "
                 + "VALUES ('customer-c2', 'identity-c2', '客户二', 'VERIFIED', 'NORMAL')");
+    }
+
+    @Test
+    void ledgerFiltersAndCountsBeforePagination() {
+        String requestId = requestId();
+        String accountId = accounts.open(CUSTOMER, new OpenRequest("CNY", requestId), requestId).accountId();
+        LocalDateTime timestamp = LocalDateTime.of(2026, 11, 19, 12, 0);
+        for (int i = 0; i < 101; i++) {
+            String tradeNo = trade(accountId, CUSTOMER.identityId(), "DEPOSIT", "SUCCESS");
+            jdbc.update("INSERT INTO transaction_flow (entry_id, trade_no, account_id, entry_role, direction, "
+                            + "amount, book_balance_after, created_at) VALUES (?, ?, ?, 'DEPOSIT_IN', 'CREDIT', ?, 500, ?)",
+                    "ledger-page-" + i, tradeNo, accountId, new BigDecimal("125.00"), timestamp);
+        }
+        String external = trade(accountId, CUSTOMER.identityId(), "EXTERNAL_TRANSFER", "SUCCESS");
+        jdbc.update("INSERT INTO transaction_flow (entry_id, trade_no, account_id, entry_role, direction, "
+                        + "amount, book_balance_after, created_at) VALUES "
+                        + "('outgoing-entry', ?, ?, 'TRANSFER_OUT', 'DEBIT', 125, 375, ?)",
+                external, accountId, timestamp);
+        var query = new FundEntryFilter(OffsetDateTime.parse("2026-11-19T12:00:00+08:00"),
+                OffsetDateTime.parse("2026-11-19T12:00:00+08:00"), null, "125.00", "125.00", "DEPOSIT", "CREDIT");
+        var deposits = accounts.fundEntries(CUSTOMER, accountId, 2, 100, query, null);
+        assertThat(deposits.total()).isEqualTo(101);
+        assertThat(deposits.items()).singleElement().satisfies(entry -> {
+            assertThat(entry.entryId()).isEqualTo("ledger-page-0");
+            assertThat(entry.businessType()).isEqualTo("DEPOSIT");
+            assertThat(entry.amount()).isEqualTo("125.00");
+        });
+        var externalOnly = new FundEntryFilter(null, null, null, null, null, "EXTERNAL_TRANSFER", "DEBIT");
+        assertThat(accounts.fundEntries(CUSTOMER, accountId, 1, 20, externalOnly, null).items())
+                .extracting(FundEntryView::tradeNo).containsExactly(external);
+        var invalidBounds = new FundEntryFilter(null, null, null, "150.00", "100.00", null, null);
+        assertError(() -> accounts.fundEntries(CUSTOMER, accountId, 1, 20, invalidBounds, null),
+                ErrorCode.INVALID_ARGUMENT);
+        assertError(() -> accounts.fundEntries(OTHER, accountId, 1, 20, query, null),
+                ErrorCode.ACCOUNT_NOT_FOUND);
     }
 
     @Test
@@ -108,7 +146,7 @@ class AccountLifecycleIntegrationTest {
         }
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM account WHERE customer_id = ? AND status <> 'CLOSED'",
                 Long.class, CUSTOMER.customerId())).isEqualTo(3);
-        assertThat(accounts.get(CUSTOMER, first.accountId()).status()).isEqualTo("FROZEN");
+        assertThat(accounts.get(CUSTOMER, first.accountId(), null).status()).isEqualTo("FROZEN");
     }
 
     @Test
@@ -145,21 +183,26 @@ class AccountLifecycleIntegrationTest {
 
         assertThat(first.restrictions()).hasSize(1);
         assertThat(second.restrictions()).hasSize(2);
-        assertThat(accounts.get(CUSTOMER, accountId).restrictions()).containsExactlyElementsOf(second.restrictions());
+        assertThat(accounts.get(CUSTOMER, accountId, null).restrictions()).containsExactlyElementsOf(second.restrictions());
         assertError(() -> accounts.unfreeze(risk, accountId,
                 new UnfreezeRequest("风险解除", "风险复核通过", all, null), requestId()), ErrorCode.FORBIDDEN);
         assertError(() -> accounts.unfreeze(ops, accountId,
                 new UnfreezeRequest("仅解除一项", "运营核查完成", List.of(all.getFirst()), null), requestId()),
                 ErrorCode.ACCOUNT_STATUS_INVALID);
-        assertThat(accounts.get(CUSTOMER, accountId).status()).isEqualTo("FROZEN");
+        assertThat(accounts.get(CUSTOMER, accountId, null).status()).isEqualTo("FROZEN");
 
         String unfreezeRequest = requestId();
         var body = new UnfreezeRequest("全部限制均解除", "运营和风控分别核对通过", all, null);
+        assertError(() -> accounts.unfreeze(ops, accountId, body, unfreezeRequest), ErrorCode.ACCOUNT_STATUS_INVALID);
+        assertThat(accounts.get(CUSTOMER, accountId, null).status()).isEqualTo("FROZEN");
+        jdbc.update("INSERT INTO risk_freeze_release (restriction_id, approved_by, basis) VALUES (?, ?, ?)",
+                all.getLast(), risk.identityId(), "风控复核完成");
+        assertThat(accounts.get(ops, accountId, "运营核查").restrictions().getLast().releaseApproved()).isTrue();
         assertThat(accounts.unfreeze(ops, accountId, body, unfreezeRequest).status()).isEqualTo("ACTIVE");
         assertThat(accounts.unfreeze(ops, accountId, body, unfreezeRequest).status()).isEqualTo("ACTIVE");
         assertThat(accounts.freeze(ops, accountId, new FreezeRequest("运营核查", null), firstRequest)).isEqualTo(first);
-        assertThat(accounts.get(CUSTOMER, accountId).status()).isEqualTo("ACTIVE");
-        assertThat(accounts.get(CUSTOMER, accountId).restrictions()).isEmpty();
+        assertThat(accounts.get(CUSTOMER, accountId, null).status()).isEqualTo("ACTIVE");
+        assertThat(accounts.get(CUSTOMER, accountId, null).restrictions()).isEmpty();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM account_status_log WHERE new_status = 'FROZEN'", Long.class))
                 .isEqualTo(2);
         assertError(() -> accounts.freeze(ops, accountId, new FreezeRequest("不同内容", null), firstRequest),
@@ -176,9 +219,10 @@ class AccountLifecycleIntegrationTest {
         accounts.freeze(allowed, accountId, request, requestId);
         Actor revoked = new Actor("operations-1", null, Set.of("OPERATIONS"), Set.of());
         assertError(() -> accounts.freeze(revoked, accountId, request, requestId), ErrorCode.FORBIDDEN);
-        assertError(() -> accounts.get(OTHER, accountId), ErrorCode.ACCOUNT_NOT_FOUND);
-        assertError(() -> accounts.balance(OTHER, accountId), ErrorCode.ACCOUNT_NOT_FOUND);
-        assertError(() -> accounts.fundEntries(OTHER, accountId, 1, 20, null, null), ErrorCode.ACCOUNT_NOT_FOUND);
+        assertError(() -> accounts.get(OTHER, accountId, null), ErrorCode.ACCOUNT_NOT_FOUND);
+        assertError(() -> accounts.balance(OTHER, accountId, null), ErrorCode.ACCOUNT_NOT_FOUND);
+        assertError(() -> accounts.fundEntries(OTHER, accountId, 1, 20, null, null, null, null),
+                ErrorCode.ACCOUNT_NOT_FOUND);
         assertError(() -> accounts.freeze(CUSTOMER, accountId, request, requestId()), ErrorCode.FORBIDDEN);
     }
 
@@ -190,7 +234,7 @@ class AccountLifecycleIntegrationTest {
         String requestId = requestId();
 
         assertError(() -> accounts.close(CUSTOMER, accountId, requestId), ErrorCode.ACCOUNT_NOT_CLOSABLE);
-        assertThat(accounts.get(CUSTOMER, accountId).status()).isEqualTo("ACTIVE");
+        assertThat(accounts.get(CUSTOMER, accountId, null).status()).isEqualTo("ACTIVE");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM account_command WHERE command_type = 'ACCOUNT_CLOSE'", Long.class))
                 .isZero();
         jdbc.update("UPDATE `transaction` SET status = 'REJECTED' WHERE trade_no = ?", tradeNo);
@@ -205,7 +249,7 @@ class AccountLifecycleIntegrationTest {
         jdbc.update("INSERT INTO transfer_order (transfer_id, trade_no, transfer_type, payer_account_id, payee_account_id, amount, currency) "
                         + "VALUES (?, ?, 'INTERNAL', ?, ?, 1.00, 'CNY')", id(), tradeNo, payer, payee);
         assertError(() -> accounts.close(CUSTOMER, payee, requestId()), ErrorCode.ACCOUNT_NOT_CLOSABLE);
-        assertThat(accounts.get(CUSTOMER, payee).status()).isEqualTo("ACTIVE");
+        assertThat(accounts.get(CUSTOMER, payee, null).status()).isEqualTo("ACTIVE");
     }
 
     @Test
@@ -215,8 +259,8 @@ class AccountLifecycleIntegrationTest {
         open(CUSTOMER);
         assertThat(accounts.close(CUSTOMER, first, requestId()).status()).isEqualTo("CLOSED");
         assertThat(open(CUSTOMER).status()).isEqualTo("ACTIVE");
-        assertThat(accounts.get(CUSTOMER, first).status()).isEqualTo("CLOSED");
-        assertThat(accounts.operations(CUSTOMER, first, 1, 20, null, null).items())
+        assertThat(accounts.get(CUSTOMER, first, null).status()).isEqualTo("CLOSED");
+        assertThat(accounts.operations(CUSTOMER, first, 1, 20, null, null, null).items())
                 .extracting(OperationView::action).contains("ACCOUNT_OPEN", "ACCOUNT_CLOSE");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM account WHERE status <> 'CLOSED'", Long.class)).isEqualTo(3);
     }
@@ -232,8 +276,57 @@ class AccountLifecycleIntegrationTest {
                 new LimitsRequest("250.00", "1500.00", null), requestId()), ErrorCode.INVALID_ARGUMENT);
         assertError(() -> accounts.limits(CUSTOMER, accountId,
                 new LimitsRequest("200.00", "100.00", null), requestId()), ErrorCode.INVALID_ARGUMENT);
-        assertThat(accounts.get(CUSTOMER, accountId).personalSingleLimit()).isEqualTo("150.00");
-        assertThat(accounts.get(CUSTOMER, accountId).personalDailyLimit()).isEqualTo("1500.00");
+        assertThat(accounts.get(CUSTOMER, accountId, null).personalSingleLimit()).isEqualTo("150.00");
+        assertThat(accounts.get(CUSTOMER, accountId, null).personalDailyLimit()).isEqualTo("1500.00");
+    }
+
+    @Test
+    void dailyLimitIncludesSuccessfulAndReservedOutgoingByAcceptanceDay() {
+        String accountId = open(CUSTOMER).accountId();
+        String succeeded = trade(accountId, CUSTOMER.identityId(), "WITHDRAWAL", "SUCCESS");
+        String reserved = trade(accountId, CUSTOMER.identityId(), "EXTERNAL_TRANSFER", "UNKNOWN");
+        String previous = trade(accountId, CUSTOMER.identityId(), "WITHDRAWAL", "UNKNOWN");
+        LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Shanghai"));
+        jdbc.update("UPDATE `transaction` SET accepted_at = ?, amount = 8000 WHERE trade_no = ?", now, succeeded);
+        jdbc.update("UPDATE `transaction` SET accepted_at = ?, amount = 2000 WHERE trade_no = ?", now, reserved);
+        jdbc.update("UPDATE `transaction` SET accepted_at = ?, amount = 3000 WHERE trade_no = ?", now.minusDays(1), previous);
+        jdbc.update("INSERT INTO account_reservation (trade_no, account_id, amount, status) "
+                + "VALUES (?, ?, 2000, 'RESERVED'), (?, ?, 3000, 'RESERVED')", reserved, accountId, previous, accountId);
+
+        assertThatThrownBy(() -> accounts.limits(CUSTOMER, accountId,
+                new LimitsRequest("1000.00", "9999.99", null), requestId()))
+                .isInstanceOf(BizException.class).hasMessageContaining("10000.00");
+        assertThat(accounts.get(CUSTOMER, accountId, null).personalDailyLimit()).isNull();
+        assertThat(accounts.limits(CUSTOMER, accountId, new LimitsRequest("1000.00", "10000.00", null), requestId())
+                .personalDailyLimit()).isEqualTo("10000.00");
+
+        jdbc.update("UPDATE account_reservation SET status = 'RELEASED' WHERE trade_no = ?", reserved);
+        assertThat(accounts.limits(CUSTOMER, accountId, new LimitsRequest("1000.00", "8000.00", null), requestId())
+                .personalDailyLimit()).isEqualTo("8000.00");
+    }
+
+    @Test
+    void scopedStaffFundEntriesRequireAReasonAndCanFilterByTrade() {
+        String accountId = open(CUSTOMER).accountId();
+        Actor ops = staff("operations-1", "OPERATIONS", accountId);
+        Actor outside = staff("operations-2", "OPERATIONS", "another-account");
+        String tradeNo = trade(accountId, CUSTOMER.identityId(), "DEPOSIT", "SUCCESS");
+        String anotherTrade = trade(accountId, CUSTOMER.identityId(), "DEPOSIT", "SUCCESS");
+        for (String trade : List.of(tradeNo, anotherTrade)) {
+            jdbc.update("INSERT INTO transaction_flow (entry_id, trade_no, account_id, entry_role, direction, amount, book_balance_after) "
+                    + "VALUES (?, ?, ?, 'DEPOSIT_IN', 'CREDIT', 1, 1)", id(), trade, accountId);
+        }
+
+        assertError(() -> accounts.fundEntries(ops, accountId, 1, 20, null, null, tradeNo, " "),
+                ErrorCode.INVALID_ARGUMENT);
+        assertError(() -> accounts.fundEntries(outside, accountId, 1, 20, null, null, tradeNo, "核查"),
+                ErrorCode.FORBIDDEN);
+        assertThat(accounts.fundEntries(CUSTOMER, accountId, 1, 20, null, null, null, null).items()).hasSize(2);
+        assertThat(accounts.fundEntries(ops, accountId, 1, 20, null, null, tradeNo, "  核对入账  ").items())
+                .extracting(FundEntryView::tradeNo).containsExactly(tradeNo);
+        assertThat(jdbc.queryForList("SELECT reason FROM audit_log WHERE action = 'FUND_ENTRIES_QUERY' "
+                + "AND trade_no = ? AND operator_identity_id = ?", String.class, tradeNo, ops.identityId()))
+                .containsExactly("核对入账");
     }
 
     @Test
@@ -241,17 +334,58 @@ class AccountLifecycleIntegrationTest {
         String own = open(CUSTOMER).accountId();
         String other = open(OTHER).accountId();
         jdbc.update("UPDATE account SET book_balance = 100.00, reserved_amount = 35.25 WHERE account_id = ?", own);
-        BalanceView balance = accounts.balance(CUSTOMER, own);
+        BalanceView balance = accounts.balance(CUSTOMER, own, null);
         assertThat(balance.bookBalance()).isEqualTo("100.00");
         assertThat(balance.reservedAmount()).isEqualTo("35.25");
         assertThat(balance.availableBalance()).isEqualTo("64.75");
+        // 「我的账户」只返回本人账户，后台授权范围账户不再并进来。
         assertThat(accounts.list(CUSTOMER, 1, 20).items()).extracting(AccountView::accountId).containsExactly(own);
         Actor scoped = staff("operations-1", "OPERATIONS", other);
-        assertThat(accounts.list(scoped, 1, 20).items()).extracting(AccountView::accountId).containsExactly(other);
+        assertThat(accounts.list(scoped, 1, 20).items()).isEmpty();
         Actor wildcard = staff("operations-2", "OPERATIONS", "*");
         assertThat(accounts.list(wildcard, 1, 20).items()).isEmpty();
+        // 后台按授权范围查账户改走独立接口：必须带查询原因，客户调用被拒，查询写审计。
+        assertError(() -> accounts.scoped(scoped, 1, 20, " "), ErrorCode.INVALID_ARGUMENT);
+        assertError(() -> accounts.scoped(CUSTOMER, 1, 20, "核查"), ErrorCode.FORBIDDEN);
+        assertThat(accounts.scoped(scoped, 1, 20, "  核查授权账户  ").items())
+                .extracting(AccountView::accountId).containsExactly(other);
+        assertThat(accounts.scoped(wildcard, 1, 20, "核查通配范围").items()).isEmpty();
+        assertThat(jdbc.queryForList("SELECT reason FROM audit_log WHERE action = 'BACKOFFICE_ACCOUNTS_QUERY' "
+                + "AND operator_identity_id = ?", String.class, scoped.identityId()))
+                .containsExactly("核查授权账户");
         assertError(() -> accounts.list(CUSTOMER, 0, 20), ErrorCode.INVALID_ARGUMENT);
         assertError(() -> accounts.list(CUSTOMER, 1, 101), ErrorCode.INVALID_ARGUMENT);
+    }
+
+    @Test
+    void backOfficeQueriesRequireReasonAndAreAudited() {
+        String accountId = open(CUSTOMER).accountId();
+        Actor ops = staff("operations-1", "OPERATIONS", accountId);
+        Actor outside = staff("operations-2", "OPERATIONS", "another-account");
+
+        assertError(() -> accounts.get(ops, accountId, null), ErrorCode.INVALID_ARGUMENT);
+        assertError(() -> accounts.get(ops, accountId, " "), ErrorCode.INVALID_ARGUMENT);
+        assertError(() -> accounts.balance(ops, accountId, null), ErrorCode.INVALID_ARGUMENT);
+        assertError(() -> accounts.operations(ops, accountId, 1, 20, null, null, null), ErrorCode.INVALID_ARGUMENT);
+
+        assertError(() -> accounts.get(outside, accountId, "核查"), ErrorCode.FORBIDDEN);
+        assertError(() -> accounts.balance(outside, accountId, "核查"), ErrorCode.FORBIDDEN);
+
+        assertThat(accounts.get(ops, accountId, " 核对账户 ").status()).isEqualTo("ACTIVE");
+        assertThat(accounts.balance(ops, accountId, " 核对余额 ").bookBalance()).isEqualTo("0.00");
+        assertThat(accounts.operations(ops, accountId, 1, 20, null, null, " 核对操作 ").items()).isNotEmpty();
+
+        assertThat(jdbc.queryForList("SELECT action FROM audit_log WHERE operator_identity_id = ? "
+                + "AND action IN ('ACCOUNT_GET_QUERY','ACCOUNT_BALANCE_QUERY','ACCOUNT_OPERATIONS_QUERY') "
+                + "ORDER BY id", String.class, ops.identityId()))
+                .containsExactly("ACCOUNT_GET_QUERY", "ACCOUNT_BALANCE_QUERY", "ACCOUNT_OPERATIONS_QUERY");
+        assertThat(jdbc.queryForList("SELECT reason FROM audit_log WHERE action = 'ACCOUNT_GET_QUERY' "
+                + "AND operator_identity_id = ?", String.class, ops.identityId())).containsExactly("核对账户");
+
+        assertThat(accounts.get(CUSTOMER, accountId, null).status()).isEqualTo("ACTIVE");
+        assertThat(jdbc.queryForList("SELECT action FROM audit_log WHERE operator_identity_id = ? AND action IN "
+                + "('ACCOUNT_GET_QUERY','ACCOUNT_BALANCE_QUERY','ACCOUNT_OPERATIONS_QUERY')",
+                String.class, CUSTOMER.identityId())).isEmpty();
     }
 
     @Test
@@ -261,7 +395,7 @@ class AccountLifecycleIntegrationTest {
         Actor ops = staff("operations-1", "OPERATIONS", accountId);
         assertThatThrownBy(() -> accounts.freeze(ops, accountId, new FreezeRequest("运营核查", null), requestId()))
                 .isInstanceOf(DataAccessException.class);
-        assertThat(accounts.get(CUSTOMER, accountId).status()).isEqualTo("ACTIVE");
+        assertThat(accounts.get(CUSTOMER, accountId, null).status()).isEqualTo("ACTIVE");
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM account_status_log WHERE new_status = 'FROZEN'", Long.class)).isZero();
         assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM account_command WHERE command_type = 'ACCOUNT_FREEZE'", Long.class)).isZero();
     }

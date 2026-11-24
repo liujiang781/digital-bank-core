@@ -16,7 +16,7 @@ import org.springframework.stereotype.Component;
 /**
  * 非终态原单恢复扫描（交接文档 7.1/8、跨行交接文档第 3 节）：
  * 进程启动后以及每 10 秒扫描一次，沿原 tradeNo 从未完成步骤恢复。
- * 按业务类型分流：存款走渠道链路；取款/本行转账走预留链路（无渠道记录）；
+ * 按业务类型分流：存款、取款和跨行走模拟渠道；本行转账在本地记账。
  * 跨行转账渠道链路（PROCESSING/UNKNOWN/RECOVERING 沿原渠道记录重放回执）。
  * ACCEPTED 继续风控与账户侧受理/预留；PROCESSING 先查资金结果再推进；
  * UNKNOWN/RECOVERING 只在已登记的渠道结果或失败依据上推进：
@@ -85,14 +85,21 @@ public class RecoveryScheduler {
         }
     }
 
-    /** 取款/本行转账无渠道记录：UNKNOWN/RECOVERING 不应自动出现，出现即转人工，不得改判失败。 */
     private void resumeWithdrawal(IdempotencyService.TradeRow row) {
-        switch (row.status()) {
-            case "ACCEPTED" -> withdrawalService.resume(row, null);
-            case "PROCESSING" -> withdrawalService.resumeProcessing(row, null);
-            default -> log.warn("出账原单出现未知或恢复状态，转人工核对，不得改判失败: tradeNo={}, status={}",
-                    row.tradeNo(), row.status());
+        if ("ACCEPTED".equals(row.status())) {
+            withdrawalService.resume(row, null);
+            return;
         }
+        ChannelRow record = channel.find(row.tradeNo());
+        if (record == null && "PROCESSING".equals(row.status())) {
+            record = channel.createOrGet(row.tradeNo(), row.accountId(), row.amount(), row.currency());
+        }
+        if (record == null) return; // Older RECOVERING rows may only have local failure evidence.
+        if ("UNKNOWN".equals(row.status()) && MockChannelService.UNKNOWN.equals(record.result())) {
+            record = reconcileChannelRecord(row, record);
+            if (MockChannelService.UNKNOWN.equals(record.result())) return;
+        }
+        withdrawalService.reportChannelResult(record, null);
     }
 
     private void resumeTransfer(IdempotencyService.TradeRow row) {
@@ -179,7 +186,7 @@ public class RecoveryScheduler {
 
     /**
      * 渠道层有界核对：UNKNOWN 且到期才查询一次渠道，进度持久化、不因扫描或重启重置；
-     * 已转人工或未到期原样返回。返回核对后的最新渠道记录（存款与跨行共用）。
+     * 已转人工或未到期原样返回。返回核对后的最新渠道记录。
      */
     private ChannelRow reconcileChannelRecord(IdempotencyService.TradeRow row, ChannelRow record) {
         if (record.manualReviewRequired() || record.nextCheckAt() == null) return record; // 已转人工或等待人工查询

@@ -12,7 +12,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.digitalbank.common.auth.AuthTokens;
 import com.digitalbank.common.auth.SessionIdentity;
 import com.digitalbank.common.auth.SessionVerifier;
+import com.digitalbank.risk.service.OutgoingFrequencyMonitor;
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -24,6 +27,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * S3 P2/待评审风控接口对外测试：告警处置、规则提交/审批、名单提交/审批。
@@ -47,6 +51,8 @@ class RiskP2ApiTest {
     private MockMvc mockMvc;
     @Autowired
     private JdbcTemplate jdbc;
+    @Autowired
+    private OutgoingFrequencyMonitor frequencyMonitor;
     @MockitoBean
     private SessionVerifier sessionVerifier;
 
@@ -95,6 +101,38 @@ class RiskP2ApiTest {
     // ---------- 告警处置 ----------
 
     @Test
+    @Transactional
+    void onlyScopedRiskCanApproveTheMatchingActiveRiskRestriction() throws Exception {
+        jdbc.update("UPDATE account SET status = 'FROZEN' WHERE account_id IN (?, ?)", IN_SCOPE, OUT_SCOPE);
+        jdbc.update("INSERT INTO account_status_log (id, account_id, new_status, change_reason) "
+                + "VALUES (1001, ?, 'FROZEN', 'RISK: review'), (1002, ?, 'FROZEN', 'RISK: unrelated'), "
+                + "(1003, ?, 'FROZEN', 'OPERATIONS: review')", IN_SCOPE, OUT_SCOPE, IN_SCOPE);
+        String path = "/api/v1/risk/accounts/{accountId}/restrictions/{restrictionId}/release-approval";
+        String basis = "{\"basis\":\"风控复核通过\"}";
+        mockMvc.perform(post(path, IN_SCOPE, 1001).header("Authorization", "Bearer " + OPS_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON).content(basis))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post(path, OUT_SCOPE, 1002).header("Authorization", "Bearer " + RISK1_TOKEN)
+                        .contentType(MediaType.APPLICATION_JSON).content(basis))
+                .andExpect(status().isForbidden());
+        for (long restrictionId : new long[] {1002, 1003}) {
+            mockMvc.perform(post(path, IN_SCOPE, restrictionId).header("Authorization", "Bearer " + RISK1_TOKEN)
+                            .contentType(MediaType.APPLICATION_JSON).content(basis))
+                    .andExpect(jsonPath("$.code").value("ACCOUNT_STATUS_INVALID"));
+        }
+        for (int replay = 0; replay < 2; replay++) {
+            mockMvc.perform(post(path, IN_SCOPE, 1001).header("Authorization", "Bearer " + RISK1_TOKEN)
+                            .contentType(MediaType.APPLICATION_JSON).content(basis))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.data.restrictionId").value(1001));
+        }
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM risk_freeze_release", Integer.class));
+        assertEquals(1, jdbc.queryForObject(
+                "SELECT COUNT(*) FROM audit_log WHERE action = 'RISK_FREEZE_RELEASE_APPROVE'", Integer.class));
+        assertEquals("FROZEN", jdbc.queryForObject("SELECT status FROM account WHERE account_id = ?", String.class, IN_SCOPE));
+    }
+
+    @Test
     void riskWriterCanDisposeAlertWithIdempotency() throws Exception {
         String body = "{\"decision\":\"CONFIRMED\",\"basis\":\"人工确认异常\",\"requestId\":\"" + REQ1 + "\"}";
         mockMvc.perform(post("/api/v1/risk/alerts/EVT-P2/dispose")
@@ -102,6 +140,7 @@ class RiskP2ApiTest {
                         .contentType(MediaType.APPLICATION_JSON).content(body))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.eventId").value("EVT-P2"))
+                .andExpect(jsonPath("$.data.tradeNo").value("TRD-P2"))
                 .andExpect(jsonPath("$.data.decision").value("CONFIRMED"));
         // 同键重放返回原结果，不新增处置记录
         mockMvc.perform(post("/api/v1/risk/alerts/EVT-P2/dispose")
@@ -110,6 +149,43 @@ class RiskP2ApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.decision").value("CONFIRMED"));
         assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM risk_alert_disposal", Integer.class));
+        assertEquals("TRD-P2", jdbc.queryForObject(
+                "SELECT trade_no FROM audit_log WHERE action = 'RISK_ALERT_DISPOSE'", String.class));
+    }
+
+    @Test
+    void frequencyMarksTheFifthAcceptedOutgoingOnceWithoutChangingSettlement() throws Exception {
+        jdbc.update("INSERT INTO risk_rule (rule_id, rule_type, enabled, rule_version) "
+                + "VALUES ('RK-06', 'FREQUENCY_MONITOR', 1, 3)");
+        LocalDateTime now = LocalDateTime.now(ZoneId.of("Asia/Shanghai")).withNano(0);
+        acceptedTrade("outside-window", "WITHDRAWAL", IN_SCOPE, now.minusSeconds(85));
+        acceptedTrade("another-account", "WITHDRAWAL", OUT_SCOPE, now.minusSeconds(20));
+        acceptedTrade("deposit-is-not-outgoing", "DEPOSIT", IN_SCOPE, now.minusSeconds(20));
+        acceptedTrade("unaccepted", "WITHDRAWAL", IN_SCOPE, null);
+        acceptedTrade("first", "WITHDRAWAL", IN_SCOPE, now.minusSeconds(20));
+        acceptedTrade("second", "EXTERNAL_TRANSFER", IN_SCOPE, now.minusSeconds(19));
+        acceptedTrade("third", "INTERNAL_TRANSFER", IN_SCOPE, now.minusSeconds(18));
+        acceptedTrade("fourth", "WITHDRAWAL", IN_SCOPE, now.minusSeconds(17));
+        frequencyMonitor.scan();
+        assertEquals(0, jdbc.queryForObject("SELECT COUNT(*) FROM risk_event WHERE rule_id = 'RK-06'", Integer.class));
+
+        acceptedTrade("fifth", "EXTERNAL_TRANSFER", IN_SCOPE, now.minusSeconds(16));
+        frequencyMonitor.scan();
+        frequencyMonitor.scan();
+        assertEquals(1, jdbc.queryForObject("SELECT COUNT(*) FROM risk_event WHERE rule_id = 'RK-06'", Integer.class));
+        assertEquals("PROCESSING", jdbc.queryForObject("SELECT status FROM `transaction` WHERE trade_no = 'fifth'",
+                String.class));
+        mockMvc.perform(get("/api/v1/risk/events").header("Authorization", "Bearer " + RISK1_TOKEN)
+                        .param("result", "MARK").param("reasonCode", "HIGH_FREQUENCY").param("reason", "复核告警"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.items[0].tradeNo").value("fifth"))
+                .andExpect(jsonPath("$.data.items[0].ruleVersion").value(3));
+    }
+
+    private void acceptedTrade(String tradeNo, String type, String account, LocalDateTime acceptedAt) {
+        jdbc.update("INSERT INTO `transaction` (trade_no, identity_id, business_type, request_id, request_hash, "
+                        + "account_id, amount, status, accepted_at) VALUES (?, 'owner', ?, ?, 'hash', ?, 100, ?, ?)",
+                tradeNo, type, "req-" + tradeNo, account, acceptedAt == null ? "ACCEPTED" : "PROCESSING", acceptedAt);
     }
 
     @Test

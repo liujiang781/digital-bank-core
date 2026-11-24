@@ -10,8 +10,8 @@ import com.digitalbank.risk.support.ChangeIds;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
-import java.util.List;
 import java.util.Set;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -45,51 +45,49 @@ public class AlertDisposalService {
         }
         String requestId = ChangeIds.uuid(body.requestId());
         String hash = ChangeIds.disposeHash(eventId, body.decision(), body.basis());
+        String basis = body.basis().trim();
+        int reasonLength = basis.offsetByCodePoints(0, Math.min(255, basis.codePointCount(0, basis.length())));
         EventRow event = jdbc.query(
-                "SELECT e.event_id, e.trade_no, t.account_id FROM risk_event e "
+                "SELECT e.trade_no, t.account_id FROM risk_event e "
                         + "JOIN `transaction` t ON t.trade_no = e.trade_no WHERE e.event_id = ?",
-                (rs, index) -> new EventRow(rs.getString("event_id"), rs.getString("trade_no"),
-                        rs.getString("account_id")),
+                (rs, index) -> new EventRow(rs.getString("trade_no"), rs.getString("account_id")),
                 eventId).stream().findFirst()
                 .orElseThrow(() -> new BizException(ErrorCode.INVALID_ARGUMENT, "风险事件不存在"));
         access.requireScope(identity, event.accountId());
-
-        Boolean claim = transactions.execute(status -> {
-            List<String> hashes = jdbc.query(
-                    "SELECT request_hash FROM risk_alert_disposal WHERE event_id = ? AND identity_id = ? "
-                            + "AND request_id = ?",
-                    (rs, i) -> rs.getString(1), eventId, identity.identityId(), requestId);
-            if (!hashes.isEmpty()) {
-                if (!hash.equals(hashes.getFirst())) {
-                    throw new BizException(ErrorCode.REQUEST_CONFLICT, "同一请求号的内容与原处置不一致");
-                }
-                return false;
+        try {
+            return transactions.execute(status -> {
+                jdbc.update("INSERT INTO risk_alert_disposal (event_id, identity_id, decision, basis, request_id, "
+                                + "request_hash, trade_no, trace_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                        eventId, identity.identityId(), body.decision(), basis, requestId, hash,
+                        event.tradeNo(), traceId);
+                jdbc.update("INSERT INTO audit_log (operator_identity_id, `action`, target_type, target_ref, reason, "
+                                + "result, trade_no) VALUES (?, 'RISK_ALERT_DISPOSE', 'risk_event', ?, ?, ?, ?)",
+                        identity.identityId(), eventId, basis.substring(0, reasonLength), body.decision(), event.tradeNo());
+                return findDisposal(eventId, identity.identityId(), requestId).view();
+            });
+        } catch (DuplicateKeyException replay) {
+            StoredDisposal original = findDisposal(eventId, identity.identityId(), requestId);
+            if (!hash.equals(original.requestHash())) {
+                throw new BizException(ErrorCode.REQUEST_CONFLICT, "同一请求号的内容与原处置不一致");
             }
-            jdbc.update("INSERT INTO risk_alert_disposal (event_id, identity_id, decision, basis, request_id, "
-                            + "request_hash, trade_no, trace_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                    eventId, identity.identityId(), body.decision(), body.basis().trim(), requestId, hash,
-                    event.tradeNo(), traceId);
-            return true;
-        });
-        if (!claim) {
-            List<AlertDisposalView> existing = jdbc.query(
-                    "SELECT event_id, trade_no, decision, basis, identity_id, request_id, created_at "
-                            + "FROM risk_alert_disposal WHERE event_id = ? AND identity_id = ? AND request_id = ?",
-                    (rs, i) -> new AlertDisposalView(rs.getString("event_id"), rs.getString("trade_no"),
-                            rs.getString("decision"), rs.getString("basis"), rs.getString("identity_id"),
-                            rs.getString("request_id"), format(rs.getObject("created_at", LocalDateTime.class)),
-                            traceId),
-                    eventId, identity.identityId(), requestId);
-            return existing.getFirst();
+            return original.view();
         }
-        jdbc.update("INSERT INTO audit_log (operator_identity_id, `action`, target_type, target_ref, reason, "
-                        + "result, trade_no) VALUES (?, 'RISK_ALERT_DISPOSE', 'risk_event', ?, ?, ?, ?)",
-                identity.identityId(), eventId, body.basis().trim(), body.decision(), eventId);
-        return new AlertDisposalView(eventId, null, body.decision(), body.basis().trim(),
-                identity.identityId(), requestId, format(LocalDateTime.now(ZONE)), traceId);
     }
 
-    private record EventRow(String eventId, String tradeNo, String accountId) { }
+    private StoredDisposal findDisposal(String eventId, String identityId, String requestId) {
+        return jdbc.queryForObject(
+                "SELECT event_id, trade_no, decision, basis, identity_id, request_id, created_at, trace_id, request_hash "
+                        + "FROM risk_alert_disposal WHERE event_id = ? AND identity_id = ? AND request_id = ?",
+                (rs, i) -> new StoredDisposal(rs.getString("request_hash"),
+                        new AlertDisposalView(rs.getString("event_id"), rs.getString("trade_no"),
+                                rs.getString("decision"), rs.getString("basis"), rs.getString("identity_id"),
+                                rs.getString("request_id"), format(rs.getObject("created_at", LocalDateTime.class)),
+                                rs.getString("trace_id"))),
+                eventId, identityId, requestId);
+    }
+
+    private record StoredDisposal(String requestHash, AlertDisposalView view) { }
+    private record EventRow(String tradeNo, String accountId) { }
 
     private static String format(LocalDateTime value) {
         return value == null ? OffsetDateTime.now(ZONE).toString() : value.atZone(ZONE).toOffsetDateTime().toString();

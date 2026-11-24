@@ -1,0 +1,29 @@
+{
+  "url": "http://127.0.0.1:5173/login",
+  "variables": ["S5_USER", "S5_PASS"],
+  "steps": [
+    { "action": "wait", "selector": "input[type='password']" },
+    { "action": "fill", "selector": "input[placeholder*='身份标识']", "value": "{{S5_USER}}" },
+    { "action": "fill", "selector": "input[type='password']", "value": "{{S5_PASS}}" },
+    { "action": "click", "selector": "button:has-text('登 录')" },
+    { "action": "wait", "selector": ".el-menu", "timeout": 10000 },
+    { "action": "extract", "selector": "body", "schema": { "登录后导航": "text:.el-menu" } },
+
+    { "action": "goto", "url": "http://127.0.0.1:5173/withdraw" },
+    { "action": "wait", "selector": "input[placeholder*='100.00']" },
+    { "action": "extract", "selector": "body", "schema": { "取款页标题": "text:h2" } },
+
+    { "action": "click", "selector": ".el-select" },
+    { "action": "wait", "selector": ".el-select-dropdown__item" },
+    { "action": "click", "selector": ".el-select-dropdown__item:has-text('ACC-0001')" },
+    { "action": "fill", "selector": "input[placeholder*='100.00']", "value": "1.00" },
+    { "action": "click", "selector": "button:has-text('提交取款')" },
+    { "action": "wait", "selector": ".el-message-box", "timeout": 8000 },
+    { "action": "extract", "selector": ".el-message-box", "schema": { "确认弹窗": "text" } },
+    { "action": "click", "selector": "button:has-text('确认取出')" },
+    { "action": "wait", "selector": ".el-descriptions", "timeout": 12000 },
+    { "action": "extract", "selector": "body", "schema": { "取款结果": "text:.el-descriptions" } },
+    { "action": "screenshot", "file": "D:/AAA编程/软件工程/digital-bank-core/docs/04-测试报告/s5/证据/2026-11-23/补测/ui-withdraw-result.png" }
+  ],
+  "output": { "file": "D:/AAA编程/软件工程/digital-bank-core/docs/04-测试报告/s5/证据/2026-11-23/补测/ui-withdraw-result.json" }
+}

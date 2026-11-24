@@ -50,9 +50,7 @@ public class TransactionAccess {
         }
     }
 
-    /** 判断是否为带账户范围的后台身份，供交易列表在本人视图与运营视图间切换。 */
-    public boolean isScopedBackOffice(Actor actor) {
-        return (actor.roles().contains("OPERATIONS") || actor.roles().contains("RISK"))
-                && !actor.accountScope().isEmpty();
+    public boolean isBackOffice(Actor actor) {
+        return actor.roles().contains("OPERATIONS") || actor.roles().contains("RISK");
     }
 }

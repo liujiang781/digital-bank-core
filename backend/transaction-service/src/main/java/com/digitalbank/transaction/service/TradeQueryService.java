@@ -2,10 +2,7 @@ package com.digitalbank.transaction.service;
 
 import com.digitalbank.common.api.ErrorCode;
 import com.digitalbank.common.exception.BizException;
-import com.digitalbank.transaction.channel.MockChannelService;
-import com.digitalbank.transaction.channel.MockChannelService.ChannelRow;
 import com.digitalbank.transaction.client.AccountClient;
-import com.digitalbank.transaction.dto.TransactionDtos.Outcome;
 import com.digitalbank.transaction.dto.TransactionDtos.ReceiptView;
 import com.digitalbank.transaction.dto.TransactionDtos.TradeDetailView;
 import com.digitalbank.transaction.dto.TransactionDtos.TradePage;
@@ -13,6 +10,7 @@ import com.digitalbank.transaction.dto.TransactionDtos.TradeSummary;
 import com.digitalbank.transaction.security.Actor;
 import com.digitalbank.transaction.security.TransactionAccess;
 import com.digitalbank.transaction.support.Money;
+import com.digitalbank.transaction.support.RequestIds;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -23,14 +21,12 @@ import java.util.Set;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
-/**
- * 对外交易查询：先校验用户与原单的访问权限，不把内部查询接口暴露给前端。
- * 待确认（PROCESSING/UNKNOWN）交易触发一次渠道核对；主动查询只沿原单、原渠道请求标识查询一次，
- * 不重启一轮自动任务（交接文档 5.4、8）。
- */
+/** 对外交易查询读取已提交的交易状态，后台查询另记审计。 */
 @Service
 public class TradeQueryService {
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
+    private static final Set<String> CUSTOMER_TRADE_TYPES =
+            Set.of("DEPOSIT", "WITHDRAWAL", "INTERNAL_TRANSFER", "EXTERNAL_TRANSFER");
     private static final Set<String> STATUSES = Set.of("ACCEPTED", "PROCESSING", "UNKNOWN",
             "SUCCESS", "RECOVERING", "FAILED", "REJECTED");
     /** 待人工处理三态：PENDING 查询别名与具体状态逗号分隔均映射到这组库内字面量。 */
@@ -39,37 +35,39 @@ public class TradeQueryService {
     private final JdbcTemplate jdbc;
     private final TransactionAccess access;
     private final AccountClient account;
-    private final MockChannelService channel;
-    private final DepositService depositService;
-    private final ExternalTransferService externalTransferService;
 
-    public TradeQueryService(JdbcTemplate jdbc, TransactionAccess access, AccountClient account,
-            MockChannelService channel, DepositService depositService,
-            ExternalTransferService externalTransferService) {
+    public TradeQueryService(JdbcTemplate jdbc, TransactionAccess access, AccountClient account) {
         this.jdbc = jdbc;
         this.access = access;
         this.account = account;
-        this.channel = channel;
-        this.depositService = depositService;
-        this.externalTransferService = externalTransferService;
     }
 
-    public TradeDetailView detail(String actorIdentityId, String tradeNo, String traceId) {
-        IdempotencyService.TradeRow row = readOwnedTrade(actorIdentityId, tradeNo);
-        if ("PROCESSING".equals(row.status()) || "UNKNOWN".equals(row.status())) {
-            reconcileOnce(row, traceId);
+    public TradeDetailView detail(Actor actor, String tradeNo, String reason) {
+        IdempotencyService.TradeRow row = readTrade(tradeNo);
+        if (access.isBackOffice(actor)) {
+            access.requireOperator(actor, row.accountId(), true);
+            auditTrade(actor, "TRANSACTION_DETAIL", tradeNo, requireQueryReason(reason));
+        } else {
+            access.requireOwner(actor, row.identityId());
         }
-        String status = row.status();
-        String reason = row.failureReason();
-        try {
-            Outcome outcome = account.outcome(tradeNo, traceId);
-            status = outcome.status();
-            reason = outcome.reasonCode() != null ? outcome.reasonCode() : reason;
-        } catch (BizException unreachable) {
-            // 账户服务暂不可用时按本地原单解释当前状态
+        return new TradeDetailView(row.tradeNo(), row.businessType(), row.status(),
+                Money.format(row.amount()), row.failureReason(), row.accountId());
+    }
+
+    public TradeDetailView byRequest(Actor actor, String businessType, String requestId) {
+        if (access.isBackOffice(actor)) {
+            throw new BizException(ErrorCode.FORBIDDEN, "仅交易发起人能按请求号定位原交易");
         }
-        return new TradeDetailView(row.tradeNo(), row.businessType(), status,
-                Money.format(row.amount()), reason);
+        if (!CUSTOMER_TRADE_TYPES.contains(businessType)) {
+            throw new BizException(ErrorCode.INVALID_ARGUMENT, "交易类型不合法");
+        }
+        String originalRequestId = RequestIds.resolve(requestId, null);
+        return jdbc.query("SELECT trade_no, business_type, status, amount, failure_reason, account_id "
+                        + "FROM `transaction` WHERE identity_id = ? AND business_type = ? AND request_id = ?",
+                (rs, n) -> new TradeDetailView(rs.getString("trade_no"), rs.getString("business_type"),
+                        rs.getString("status"), Money.format(rs.getBigDecimal("amount")), rs.getString("failure_reason"),
+                        rs.getString("account_id")), actor.identityId(), businessType, originalRequestId)
+                .stream().findFirst().orElseThrow(() -> new BizException(ErrorCode.TRADE_NOT_FOUND, "交易不存在"));
     }
 
     /**
@@ -85,15 +83,14 @@ public class TradeQueryService {
                         rs.getBigDecimal("amount"), rs.getString("currency"), rs.getString("channel_evidence_id"),
                         rs.getObject("completed_at", LocalDateTime.class)), tradeNo).stream().findFirst()
                 .orElseThrow(() -> new BizException(ErrorCode.TRADE_NOT_FOUND, "交易不存在"));
-        if (!actor.identityId().equals(row.identityId())) {
-            // 普通客户按"交易不存在"返回，避免枚举他人交易号；后台身份越账户范围才是 403。
-            if (!access.isScopedBackOffice(actor)) {
-                throw new BizException(ErrorCode.TRADE_NOT_FOUND, "交易不存在");
-            }
+        if (access.isBackOffice(actor)) {
             access.requireOperator(actor, row.accountId(), true);
-        }
-        if (reason != null && reason.trim().length() > 255) {
-            throw new BizException(ErrorCode.INVALID_ARGUMENT, "查询原因不能超过255字符");
+            reason = requireQueryReason(reason);
+        } else {
+            access.requireOwner(actor, row.identityId());
+            if (reason != null && reason.trim().length() > 255) {
+                throw new BizException(ErrorCode.INVALID_ARGUMENT, "查询原因不能超过255字符");
+            }
         }
         String status = row.status();
         try {
@@ -105,9 +102,7 @@ public class TradeQueryService {
             throw new BizException(ErrorCode.REQUEST_CONFLICT, "仅成功交易可生成回单");
         }
         String issuedAt = offset(LocalDateTime.now(ZONE)).toString();
-        jdbc.update("INSERT INTO audit_log (operator_identity_id, `action`, target_type, target_ref, reason, "
-                        + "result, trade_no) VALUES (?, 'RECEIPT_DOWNLOAD', 'transaction', ?, ?, 'SUCCESS', ?)",
-                actor.identityId(), tradeNo, reason == null ? null : reason.trim(), tradeNo);
+        auditTrade(actor, "RECEIPT_DOWNLOAD", tradeNo, reason == null ? null : reason.trim());
         return new ReceiptView("RCPT-" + tradeNo, row.tradeNo(), row.businessType(), "SUCCESS",
                 Money.format(row.amount()), row.currency(), row.accountId(), row.channelEvidenceId(),
                 offset(row.completedAt()) == null ? null : offset(row.completedAt()).toString(), issuedAt,
@@ -133,14 +128,11 @@ public class TradeQueryService {
         if (pageSize < 1 || pageSize > 100) throw new BizException(ErrorCode.INVALID_ARGUMENT, "pageSize 取值 1-100");
         if (businessType != null && businessType.isBlank()) businessType = null;
         List<String> statusValues = expandStatuses(status);
-        boolean operator = access.isScopedBackOffice(actor);
+        boolean operator = access.isBackOffice(actor);
         String queryReason = null;
         if (operator) {
             access.requireBackOfficeRole(actor, true);
-            if (reason == null || reason.isBlank() || reason.trim().length() > 255) {
-                throw new BizException(ErrorCode.INVALID_ARGUMENT, "后台查询必须填写查询原因");
-            }
-            queryReason = reason.trim();
+            queryReason = requireQueryReason(reason);
         }
         StringBuilder where = operator
                 ? new StringBuilder(" WHERE account_id IN ("
@@ -174,8 +166,8 @@ public class TradeQueryService {
         return new TradePage(total == null ? 0 : total, page, pageSize, items);
     }
 
-    private IdempotencyService.TradeRow readOwnedTrade(String actorIdentityId, String tradeNo) {
-        IdempotencyService.TradeRow row = jdbc.query(
+    private IdempotencyService.TradeRow readTrade(String tradeNo) {
+        return jdbc.query(
                 "SELECT trade_no, identity_id, business_type, status, account_id, amount, currency, failure_reason "
                         + "FROM `transaction` WHERE trade_no = ?",
                 (rs, index) -> new IdempotencyService.TradeRow(rs.getString("trade_no"),
@@ -184,24 +176,19 @@ public class TradeQueryService {
                         rs.getString("failure_reason")),
                 tradeNo).stream().findFirst()
                 .orElseThrow(() -> new BizException(ErrorCode.TRADE_NOT_FOUND, "交易不存在"));
-        access.requireOwner(new com.digitalbank.transaction.security.Actor(actorIdentityId), row.identityId());
-        return row;
     }
 
-    private void reconcileOnce(IdempotencyService.TradeRow row, String traceId) {
-        ChannelRow record = channel.find(row.tradeNo());
-        if (record == null) return;
-        ChannelRow latest = "UNKNOWN".equals(record.result())
-                ? channel.queryForReconcile(row.tradeNo()) : record;
-        if (!"UNKNOWN".equals(latest.result())) {
-            // 沿原单、原渠道请求标识查询一次；明确结果幂等上报，由 S2 推进终态
-            if ("EXTERNAL_TRANSFER".equals(row.businessType())) {
-                externalTransferService.reportExternalResult(row.tradeNo(), row.accountId(), row.amount(),
-                        latest, traceId);
-            } else {
-                depositService.reportChannelResult(row.tradeNo(), row.accountId(), row.amount(), latest, traceId);
-            }
+    private String requireQueryReason(String reason) {
+        if (reason == null || reason.isBlank() || reason.trim().length() > 255) {
+            throw new BizException(ErrorCode.INVALID_ARGUMENT, "后台查询必须填写查询原因（最多255字符）");
         }
+        return reason.trim();
+    }
+
+    private void auditTrade(Actor actor, String action, String tradeNo, String reason) {
+        jdbc.update("INSERT INTO audit_log (operator_identity_id, `action`, target_type, target_ref, reason, "
+                        + "result, trade_no) VALUES (?, ?, 'transaction', ?, ?, 'SUCCESS', ?)",
+                actor.identityId(), action, tradeNo, reason, tradeNo);
     }
 
     /**

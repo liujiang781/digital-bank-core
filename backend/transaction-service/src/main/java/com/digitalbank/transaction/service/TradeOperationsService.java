@@ -49,10 +49,12 @@ public class TradeOperationsService {
     private final AccountClient account;
     private final DepositService depositService;
     private final ExternalTransferService externalTransferService;
+    private final WithdrawalService withdrawalService;
 
     public TradeOperationsService(JdbcTemplate jdbc, TransactionTemplate transactions, ObjectMapper mapper,
             TransactionAccess access, MockChannelService channel, AccountClient account,
-            DepositService depositService, ExternalTransferService externalTransferService) {
+            DepositService depositService, ExternalTransferService externalTransferService,
+            WithdrawalService withdrawalService) {
         this.jdbc = jdbc;
         this.transactions = transactions;
         this.mapper = mapper;
@@ -61,6 +63,7 @@ public class TradeOperationsService {
         this.account = account;
         this.depositService = depositService;
         this.externalTransferService = externalTransferService;
+        this.withdrawalService = withdrawalService;
     }
 
     /** 人工核对：沿原单、原渠道标识查询明确结果并幂等上报；仍未知则保留原状。 */
@@ -77,7 +80,7 @@ public class TradeOperationsService {
             }
             ChannelRow record = channel.find(tradeNo);
             if (record == null) {
-                if ("WITHDRAWAL".equals(row.businessType()) || "INTERNAL_TRANSFER".equals(row.businessType())) {
+                if ("INTERNAL_TRANSFER".equals(row.businessType())) {
                     Outcome outcome = account.outcome(tradeNo, tid);
                     return new Action(outcome.status(), null, "LOCAL_OUTCOME_" + outcome.status(),
                             "本地交易无渠道记录，已按资金结果解释当前状态");
@@ -87,6 +90,12 @@ public class TradeOperationsService {
             // 主动核对沿原单一查一次；查询会按当前渠道模式把 UNKNOWN 收敛为明确结果。
             ChannelRow latest = MockChannelService.UNKNOWN.equals(record.result())
                     ? channel.queryForReconcile(tradeNo) : record;
+            if ("WITHDRAWAL".equals(row.businessType())) {
+                Outcome outcome = withdrawalService.reportChannelResult(latest, tid);
+                boolean unknown = MockChannelService.UNKNOWN.equals(latest.result());
+                return new Action(outcome.status(), latest.result(), unknown ? "STILL_UNKNOWN" : "REPORTED_" + latest.result(),
+                        unknown ? "渠道仍为未知，保留原占用与状态" : "已沿原渠道结果幂等上报");
+            }
             if (MockChannelService.UNKNOWN.equals(latest.result())) {
                 return new Action(row.status(), latest.result(), "STILL_UNKNOWN", "渠道仍为未知，保留原占用与状态");
             }
@@ -111,13 +120,19 @@ public class TradeOperationsService {
                 throw new BizException(ErrorCode.REQUEST_CONFLICT,
                         "仅 RECOVERING 且有明确失败依据的交易可重试恢复，请先人工核对");
             }
-            if ("EXTERNAL_TRANSFER".equals(row.businessType())) {
-                ChannelRow record = channel.find(tradeNo);
+            boolean withdrawal = "WITHDRAWAL".equals(row.businessType());
+            ChannelRow withdrawalRecord = withdrawal ? channel.find(tradeNo) : null;
+            if ("EXTERNAL_TRANSFER".equals(row.businessType()) || withdrawalRecord != null) {
+                ChannelRow record = withdrawal ? withdrawalRecord : channel.find(tradeNo);
                 if (record == null || !MockChannelService.FAILED.equals(record.result())
                         || record.evidenceId() == null || uncertain(record.reasonCode())) {
-                    throw new BizException(ErrorCode.REQUEST_CONFLICT, "缺少明确的跨行失败回执，不能恢复资金");
+                    throw new BizException(ErrorCode.REQUEST_CONFLICT, "缺少明确的渠道失败回执，不能恢复资金");
                 }
-                externalTransferService.reportExternalResult(tradeNo, row.accountId(), row.amount(), record, tid);
+                if (withdrawal) {
+                    withdrawalService.reportChannelResult(record, tid);
+                } else {
+                    externalTransferService.reportExternalResult(tradeNo, row.accountId(), row.amount(), record, tid);
+                }
             } else if ("WITHDRAWAL".equals(row.businessType()) || "INTERNAL_TRANSFER".equals(row.businessType())) {
                 String reasonCode = row.failureReason();
                 String evidenceId = jdbc.query("SELECT channel_evidence_id FROM `transaction` WHERE trade_no = ?",

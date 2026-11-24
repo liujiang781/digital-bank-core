@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.digitalbank.common.api.ErrorCode;
@@ -102,6 +103,8 @@ class TradeReceiptServiceTest {
     @Test
     void scopedOperatorCanDownloadButOtherAndOutOfScopeCannot() {
         seed("TRD-R4", "SUCCESS");
+        assertEquals(ErrorCode.INVALID_ARGUMENT,
+                assertThrows(BizException.class, () -> service.receipt(scopedOps, "TRD-R4", null, TRACE)).getErrorCode());
         ReceiptView view = service.receipt(scopedOps, "TRD-R4", "运营核查", TRACE);
         assertEquals("TRD-R4", view.tradeNo());
         assertEquals(ErrorCode.TRADE_NOT_FOUND,
@@ -109,6 +112,23 @@ class TradeReceiptServiceTest {
         assertEquals(ErrorCode.FORBIDDEN,
                 assertThrows(BizException.class, () -> service.receipt(outScopeOps, "TRD-R4", "越权", TRACE))
                         .getErrorCode());
+    }
+
+    @Test
+    void scopedOperatorDetailReturnsSnapshotAndAuditsReason() {
+        seed("TRD-DETAIL", "UNKNOWN");
+        assertEquals(ErrorCode.FORBIDDEN,
+                assertThrows(BizException.class, () -> service.detail(outScopeOps, "TRD-DETAIL", "核查"))
+                        .getErrorCode());
+        assertEquals(ErrorCode.INVALID_ARGUMENT,
+                assertThrows(BizException.class, () -> service.detail(scopedOps, "TRD-DETAIL", " ")).getErrorCode());
+        var detail = service.detail(scopedOps, "TRD-DETAIL", " 核查未决交易 ");
+        assertEquals("UNKNOWN", detail.status());
+        assertEquals(ACCOUNT, detail.accountId());
+        assertEquals("核查未决交易", jdbc.queryForObject(
+                "SELECT reason FROM audit_log WHERE action = 'TRANSACTION_DETAIL' AND trade_no = 'TRD-DETAIL'",
+                String.class));
+        verifyNoInteractions(account);
     }
 
     @Test

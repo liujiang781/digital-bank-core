@@ -25,11 +25,20 @@ public class TradeQueryController {
         this.access = access;
     }
 
-    @GetMapping("/api/v1/transactions/{tradeNo}")
-    public ApiResponse<TradeDetailView> detail(@PathVariable String tradeNo, HttpServletRequest request) {
+    @GetMapping("/api/v1/transactions/by-request")
+    public ApiResponse<TradeDetailView> byRequest(@RequestParam String requestId, @RequestParam String businessType,
+            HttpServletRequest request) {
         Actor actor = access.requireActor(request);
         String traceId = (String) request.getAttribute(TraceIds.MDC_KEY);
-        return ApiResponse.success(service.detail(actor.identityId(), tradeNo, traceId), traceId);
+        return ApiResponse.success(service.byRequest(actor, businessType, requestId), traceId);
+    }
+
+    @GetMapping("/api/v1/transactions/{tradeNo}")
+    public ApiResponse<TradeDetailView> detail(@PathVariable String tradeNo,
+            @RequestParam(required = false) String reason, HttpServletRequest request) {
+        Actor actor = access.requireActor(request);
+        String traceId = (String) request.getAttribute(TraceIds.MDC_KEY);
+        return ApiResponse.success(service.detail(actor, tradeNo, reason), traceId);
     }
 
     /** 模拟回单（UC-TR-07，P2）：仅成功交易可生成，客户本人或授权范围内运营/风控可下载。 */

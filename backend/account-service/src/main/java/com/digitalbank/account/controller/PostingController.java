@@ -6,6 +6,7 @@ import com.digitalbank.account.dto.PostingDtos.ExternalTransferResult;
 import com.digitalbank.account.dto.PostingDtos.Failure;
 import com.digitalbank.account.dto.PostingDtos.Outcome;
 import com.digitalbank.account.dto.PostingDtos.Release;
+import com.digitalbank.account.dto.PostingDtos.WithdrawalResult;
 import com.digitalbank.account.security.InternalAccess;
 import com.digitalbank.account.service.PostingService;
 import com.digitalbank.common.api.ApiResponse;
@@ -52,6 +53,16 @@ public class PostingController {
     public ApiResponse<Outcome> withdrawal(@RequestBody Command command, HttpServletRequest request) {
         access.require(request);
         return response(service.completeWithdrawal(command), request);
+    }
+
+    @PostMapping("/withdrawal-results")
+    public ApiResponse<Outcome> withdrawalResult(@RequestBody WithdrawalResult receipt, HttpServletRequest request) {
+        access.require(request);
+        Outcome outcome = service.recordWithdrawalResult(receipt);
+        if (!"UNKNOWN".equals(receipt.result()) && !receipt.result().equals(outcome.status())) {
+            outcome = service.finishWithdrawal(receipt.tradeNo());
+        }
+        return response(outcome, request);
     }
 
     @PostMapping("/internal-transfers")

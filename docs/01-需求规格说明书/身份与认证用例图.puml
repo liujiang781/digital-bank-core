@@ -1,0 +1,28 @@
+@startuml
+left to right direction
+skinparam defaultFontName Microsoft YaHei
+skinparam monochrome true
+skinparam shadowing false
+
+actor "客户\nACT-C" as Customer
+actor "系统管理员\nACT-S" as Admin
+actor "运营人员\nACT-O" as Ops
+actor "风控专员\nACT-R" as Risk
+actor "授权审批人\nACT-RM" as Reviewer
+
+rectangle "数字银行核心业务模拟系统 / 身份与认证模块" {
+  usecase "UC-ID-01\n注册与实名认证" as Register
+  usecase "UC-AU-01\n登录系统" as Login
+  usecase "UC-ID-03\n维护个人资料" as Profile
+  usecase "UC-AU-02\n管理角色与权限" as Roles
+}
+
+Customer -- Register
+Customer -- Login
+Customer -- Profile
+Admin -- Login
+Admin -- Roles
+Ops -- Login
+Risk -- Login
+Reviewer -- Login
+@enduml

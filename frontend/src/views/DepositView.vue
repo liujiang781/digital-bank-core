@@ -15,6 +15,8 @@ import { newRequestId } from '../utils/requestId'
 
 const formRef = ref()
 const accounts = ref([])
+// 确认弹窗显示期间上锁：连点提交时只弹一次，避免残留弹窗和重复业务。
+const confirming = ref(false)
 
 const form = reactive({
   accountId: '',
@@ -56,16 +58,21 @@ const { submitting, networkFailed, result, polling, submit, retry, refreshStatus
 )
 
 async function handleSubmit() {
-  await formRef.value.validate()
+  // 先上锁再校验：连点两次时，第二次进来就会被引号内的判断挡住
+  if (confirming.value || submitting.value) return
+  confirming.value = true
   try {
+    await formRef.value.validate()
     await ElMessageBox.confirm(
       `向账户 ${form.accountId} 存入 ${formatAmount(form.amount)}？`,
       '存款确认',
       { confirmButtonText: '确认存入', cancelButtonText: '取消', type: 'info' }
     )
   } catch {
+    confirming.value = false
     return
   }
+  confirming.value = false
   const res = await submit()
   // 后端已确认送达（任何业务结果）：这笔操作结束，下一笔用新 requestId
   if (res) form.requestId = newRequestId()
@@ -103,7 +110,7 @@ onMounted(async () => {
           <el-input value="CNY 人民币" disabled style="width: 220px" />
         </el-form-item>
         <el-form-item>
-          <el-button type="primary" :loading="submitting" @click="handleSubmit">提交存款</el-button>
+          <el-button type="primary" :loading="submitting || confirming" @click="handleSubmit">提交存款</el-button>
         </el-form-item>
       </el-form>
     </el-card>

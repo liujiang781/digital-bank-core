@@ -27,11 +27,13 @@ public final class AccountDtos {
     public record StatusResult(String accountId, String status) { }
     public record LimitsResult(String accountId, String personalSingleLimit,
             String personalDailyLimit) { }
-    public record RestrictionView(long restrictionId, String reason) { }
+    public record RestrictionView(long restrictionId, String reason, String source, boolean releaseApproved) { }
     public record FreezeResult(String accountId, String status, List<RestrictionView> restrictions) { }
     public record OperationView(long operationId, String action, String reason,
             String result, OffsetDateTime occurredAt) { }
-    public record FundEntryView(String entryId, String tradeNo, String entryRole,
+    public record FundEntryFilter(OffsetDateTime startTime, OffsetDateTime endTime, String tradeNo,
+            String minAmount, String maxAmount, String businessType, String direction) { }
+    public record FundEntryView(String entryId, String tradeNo, String entryRole, String businessType,
             String direction, String amount, String bookBalanceAfter, OffsetDateTime occurredAt) { }
     public record Page<T>(List<T> items, long total, int page, int pageSize) { }
 }

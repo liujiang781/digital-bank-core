@@ -25,31 +25,30 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Isolation;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AccountService {
     private static final ZoneId ZONE = ZoneId.of("Asia/Shanghai");
     private static final Set<String> BACK_OFFICE = Set.of("OPERATIONS", "RISK");
+    private static final Set<String> FUND_BUSINESS_TYPES =
+            Set.of("DEPOSIT", "WITHDRAWAL", "INTERNAL_TRANSFER", "EXTERNAL_TRANSFER");
+    private static final Set<String> FUND_DIRECTIONS = Set.of("CREDIT", "DEBIT");
     private final JdbcTemplate jdbc;
     private final AccountAccess access;
     private final ObjectMapper json;
-    private final BigDecimal defaultSingleLimit;
-    private final BigDecimal defaultDailyLimit;
+    private final AccountPolicy policy;
 
-    public AccountService(JdbcTemplate jdbc, AccountAccess access, ObjectMapper json,
-            @Value("${account.outgoing-single-limit:10000.00}") BigDecimal defaultSingleLimit,
-            @Value("${account.outgoing-daily-limit:50000.00}") BigDecimal defaultDailyLimit) {
+    public AccountService(JdbcTemplate jdbc, AccountAccess access, ObjectMapper json, AccountPolicy policy) {
         this.jdbc = jdbc;
         this.access = access;
         this.json = json;
-        this.defaultSingleLimit = defaultSingleLimit;
-        this.defaultDailyLimit = defaultDailyLimit;
+        this.policy = policy;
     }
 
     @Transactional
@@ -95,19 +94,13 @@ public class AccountService {
     @Transactional(readOnly = true)
     public Page<AccountView> list(Actor actor, int page, int pageSize) {
         pagination(page, pageSize);
+        // 「我的账户」只返回本人名下账户。后台按授权范围查账户改走独立接口 scoped()：
+        // 后台查询是审计动作，必须带查询原因，不能和客户的个人账户列表混在一起。
         List<Object> args = new ArrayList<>();
         String condition = null;
         if (actor.customerId() != null && !actor.customerId().isBlank()) {
             condition = "customer_id = ?";
             args.add(actor.customerId());
-        }
-        if (isBackOffice(actor) && !actor.accountScope().isEmpty()) {
-            List<String> scope = actor.accountScope().stream().filter(id -> !"*".equals(id)).sorted().toList();
-            if (!scope.isEmpty()) {
-                String scoped = "account_id IN (" + String.join(",", java.util.Collections.nCopies(scope.size(), "?")) + ")";
-                condition = condition == null ? scoped : "(" + condition + " OR " + scoped + ")";
-                args.addAll(scope);
-            }
         }
         if (condition == null) {
             return new Page<>(List.of(), 0, page, pageSize);
@@ -122,20 +115,73 @@ public class AccountService {
         return new Page<>(items, count == null ? 0 : count, page, pageSize);
     }
 
-    @Transactional(readOnly = true)
-    public AccountView get(Actor actor, String accountId) {
-        Account account = load(accountId, false);
-        requireRead(actor, account);
-        return view(account);
+    /**
+     * 后台按授权账户范围查账户（独立接口，UC-OP-01 后台查询）。
+     * 只查会话里显式授权的账户，客户本人账户列表不受影响；必须填写查询原因并写审计。
+     * "*" 通配标记不展开为全表，避免一次查询意外暴露所有账户。
+     * 这里用普通事务而非 readOnly：MySQL 会拒绝只读连接里的 audit_log 写入
+     * （Connection is read-only），与 fundEntries() 保持一致。
+     */
+    @Transactional
+    public Page<AccountView> scoped(Actor actor, int page, int pageSize, String reason) {
+        pagination(page, pageSize);
+        if (!isBackOffice(actor)) {
+            throw error(ErrorCode.FORBIDDEN, "仅运营或风控身份可以按授权范围查询账户");
+        }
+        String queryReason = text(reason, "查询原因");
+        List<String> scope = actor.accountScope().stream()
+                .filter(id -> id != null && !id.isBlank() && !"*".equals(id))
+                .distinct().sorted().toList();
+        if (scope.isEmpty()) {
+            audit(actor, "BACKOFFICE_ACCOUNTS_QUERY", "SCOPE_EMPTY", queryReason, null);
+            return new Page<>(List.of(), 0, page, pageSize);
+        }
+        String placeholders = String.join(",", java.util.Collections.nCopies(scope.size(), "?"));
+        List<Object> args = new ArrayList<>(scope);
+        Long count = jdbc.queryForObject("SELECT COUNT(*) FROM account WHERE account_id IN (" + placeholders + ")",
+                Long.class, args.toArray());
+        List<Object> queryArgs = new ArrayList<>(args);
+        queryArgs.add(pageSize);
+        queryArgs.add((long) (page - 1) * pageSize);
+        List<AccountView> items = jdbc.query("SELECT * FROM account WHERE account_id IN (" + placeholders + ")"
+                        + " ORDER BY created_at DESC, account_id DESC LIMIT ? OFFSET ?", Account::fromRow, queryArgs.toArray())
+                .stream().map(this::view).toList();
+        String scopeRef = String.join(",", scope);
+        if (scopeRef.length() > 64) scopeRef = scopeRef.substring(0, 64);
+        audit(actor, "BACKOFFICE_ACCOUNTS_QUERY", scopeRef, queryReason, null);
+        return new Page<>(items, count == null ? 0 : count, page, pageSize);
     }
 
-    @Transactional(readOnly = true)
-    public BalanceView balance(Actor actor, String accountId) {
+    @Transactional
+    public AccountView get(Actor actor, String accountId, String reason) {
         Account account = load(accountId, false);
-        requireRead(actor, account);
-        return new BalanceView(account.accountId(), account.currency(), account.status(),
+        boolean staff = isBackOffice(actor);
+        if (staff) {
+            access.requireOperator(actor, accountId, true);
+            reason = text(reason, "查询原因");
+        } else {
+            requireRead(actor, account);
+        }
+        AccountView result = view(account);
+        if (staff) audit(actor, "ACCOUNT_GET_QUERY", accountId, reason, null);
+        return result;
+    }
+
+    @Transactional
+    public BalanceView balance(Actor actor, String accountId, String reason) {
+        Account account = load(accountId, false);
+        boolean staff = isBackOffice(actor);
+        if (staff) {
+            access.requireOperator(actor, accountId, true);
+            reason = text(reason, "查询原因");
+        } else {
+            requireRead(actor, account);
+        }
+        BalanceView result = new BalanceView(account.accountId(), account.currency(), account.status(),
                 Money.format(account.bookBalance()), Money.format(account.reservedAmount()),
                 Money.format(account.availableBalance()));
+        if (staff) audit(actor, "ACCOUNT_BALANCE_QUERY", accountId, reason, null);
+        return result;
     }
 
     @Transactional
@@ -173,9 +219,13 @@ public class AccountService {
                     if (!"FROZEN".equals(account.status())) {
                         throw error(ErrorCode.ACCOUNT_STATUS_INVALID, "仅冻结账户可以解冻");
                     }
-                    List<Long> active = activeRestrictions(accountId).stream().map(RestrictionView::restrictionId).sorted().toList();
+                    List<RestrictionView> restrictions = activeRestrictions(accountId);
+                    List<Long> active = restrictions.stream().map(RestrictionView::restrictionId).toList();
                     if (active.isEmpty() || !active.equals(resolved)) {
                         throw error(ErrorCode.ACCOUNT_STATUS_INVALID, "解除依据必须覆盖全部当前有效限制");
+                    }
+                    if (restrictions.stream().anyMatch(r -> "RISK".equals(r.source()) && !r.releaseApproved())) {
+                        throw error(ErrorCode.ACCOUNT_STATUS_INVALID, "仍有风控冻结原因缺少有效的解除结论");
                     }
                     jdbc.update("UPDATE account SET status = 'ACTIVE', version = version + 1 WHERE account_id = ?", accountId);
                     statusLog(actor, accountId, "FROZEN", "ACTIVE", reason);
@@ -185,7 +235,7 @@ public class AccountService {
                 });
     }
 
-    @Transactional
+    @Transactional(isolation = Isolation.READ_COMMITTED)
     public LimitsResult limits(Actor actor, String accountId, LimitsRequest request, String requestId) {
         Account account = load(accountId, true);
         access.requireOwner(actor, account.customerId());
@@ -197,15 +247,14 @@ public class AccountService {
                     if ("CLOSED".equals(account.status())) {
                         throw error(ErrorCode.ACCOUNT_STATUS_INVALID, "已注销账户不能修改限额");
                     }
-                    List<Map<String, Object>> policies = jdbc.queryForList(
-                            "SELECT outgoing_single_limit, outgoing_daily_limit FROM risk_rule "
-                                    + "WHERE rule_type = 'LIMIT_POLICY' AND enabled = 1 ORDER BY rule_version DESC, id DESC LIMIT 1");
-                    BigDecimal systemSingle = policies.isEmpty() ? defaultSingleLimit
-                            : (BigDecimal) policies.getFirst().get("outgoing_single_limit");
-                    BigDecimal systemDaily = policies.isEmpty() ? defaultDailyLimit
-                            : (BigDecimal) policies.getFirst().get("outgoing_daily_limit");
-                    if (single.compareTo(systemSingle) > 0 || daily.compareTo(systemDaily) > 0) {
+                    var system = policy.limits();
+                    if (single.compareTo(system.single()) > 0 || daily.compareTo(system.daily()) > 0) {
                         throw error(ErrorCode.INVALID_ARGUMENT, "个人限额不得高于系统上限");
+                    }
+                    BigDecimal dailyUsed = policy.dailyUsed(accountId);
+                    if (daily.compareTo(dailyUsed) < 0) {
+                        throw error(ErrorCode.INVALID_ARGUMENT,
+                                "个人日限额不得低于当天已用额度 " + Money.format(dailyUsed));
                     }
                     jdbc.update("UPDATE account SET personal_single_limit = ?, personal_daily_limit = ?, "
                                     + "version = version + 1 WHERE account_id = ?", single, daily, accountId);
@@ -241,28 +290,91 @@ public class AccountService {
         });
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Page<OperationView> operations(Actor actor, String accountId, int page, int pageSize,
-            OffsetDateTime startTime, OffsetDateTime endTime) {
-        requireRead(actor, load(accountId, false));
+            OffsetDateTime startTime, OffsetDateTime endTime, String reason) {
+        Account account = load(accountId, false);
+        boolean staff = isBackOffice(actor);
+        if (staff) {
+            access.requireOperator(actor, accountId, true);
+            reason = text(reason, "查询原因");
+        } else {
+            requireRead(actor, account);
+        }
         List<Object> args = new ArrayList<>(List.of(accountId));
         String filter = timeFilter("target_type = 'account' AND target_ref = ?", args, startTime, endTime);
-        return queryPage("audit_log", filter, args, page, pageSize,
+        Page<OperationView> result = queryPage("audit_log", filter, args, page, pageSize,
                 (rs, n) -> new OperationView(rs.getLong("id"), rs.getString("action"), rs.getString("reason"),
                         rs.getString("result"), offset(rs.getObject("created_at", LocalDateTime.class))), "created_at DESC, id DESC");
+        if (staff) audit(actor, "ACCOUNT_OPERATIONS_QUERY", accountId, reason, null);
+        return result;
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public Page<FundEntryView> fundEntries(Actor actor, String accountId, int page, int pageSize,
-            OffsetDateTime startTime, OffsetDateTime endTime) {
-        requireRead(actor, load(accountId, false));
+            OffsetDateTime startTime, OffsetDateTime endTime, String tradeNo, String reason) {
+        return fundEntries(actor, accountId, page, pageSize,
+                new FundEntryFilter(startTime, endTime, tradeNo, null, null, null, null), reason);
+    }
+
+    @Transactional
+    public Page<FundEntryView> fundEntries(Actor actor, String accountId, int page, int pageSize,
+            FundEntryFilter query, String reason) {
+        Account account = load(accountId, false);
+        boolean staff = isBackOffice(actor);
+        if (staff) {
+            access.requireOperator(actor, accountId, true);
+            reason = text(reason, "查询原因");
+        } else {
+            requireRead(actor, account);
+        }
         List<Object> args = new ArrayList<>(List.of(accountId));
-        String filter = timeFilter("account_id = ?", args, startTime, endTime);
-        return queryPage("transaction_flow", filter, args, page, pageSize,
+        String filter = timeFilter("account_id = ?", args, query.startTime(), query.endTime());
+        String tradeNo = query.tradeNo();
+        if (tradeNo != null) {
+            if (tradeNo.isBlank() || tradeNo.length() > 32) {
+                throw error(ErrorCode.INVALID_ARGUMENT, "交易号不合法");
+            }
+            filter += " AND trade_no = ?";
+            args.add(tradeNo);
+        }
+        if (query.businessType() != null) {
+            if (!FUND_BUSINESS_TYPES.contains(query.businessType())) {
+                throw error(ErrorCode.INVALID_ARGUMENT, "交易类型不合法");
+            }
+            filter += " AND business_type = ?";
+            args.add(query.businessType());
+        }
+        if (query.direction() != null) {
+            if (!FUND_DIRECTIONS.contains(query.direction())) {
+                throw error(ErrorCode.INVALID_ARGUMENT, "资金方向不合法");
+            }
+            filter += " AND direction = ?";
+            args.add(query.direction());
+        }
+        BigDecimal minAmount = query.minAmount() == null ? null : Money.parseNonNegative(query.minAmount());
+        BigDecimal maxAmount = query.maxAmount() == null ? null : Money.parseNonNegative(query.maxAmount());
+        if (minAmount != null && maxAmount != null && minAmount.compareTo(maxAmount) > 0) {
+            throw error(ErrorCode.INVALID_ARGUMENT, "最低金额不得超过最高金额");
+        }
+        if (minAmount != null) {
+            filter += " AND amount >= ?";
+            args.add(minAmount);
+        }
+        if (maxAmount != null) {
+            filter += " AND amount <= ?";
+            args.add(maxAmount);
+        }
+        String ledger = "(SELECT f.*, t.business_type FROM transaction_flow f "
+                + "JOIN `transaction` t ON t.trade_no = f.trade_no) fund_entries";
+        Page<FundEntryView> entries = queryPage(ledger, filter, args, page, pageSize,
                 (rs, n) -> new FundEntryView(rs.getString("entry_id"), rs.getString("trade_no"),
-                        rs.getString("entry_role"), rs.getString("direction"), Money.format(rs.getBigDecimal("amount")),
+                        rs.getString("entry_role"), rs.getString("business_type"), rs.getString("direction"),
+                        Money.format(rs.getBigDecimal("amount")),
                         Money.format(rs.getBigDecimal("book_balance_after")),
                         offset(rs.getObject("created_at", LocalDateTime.class))), "created_at DESC, id DESC");
+        if (staff) audit(actor, "FUND_ENTRIES_QUERY", accountId, reason, tradeNo);
+        return entries;
     }
 
     private Account load(String accountId, boolean lock) {
@@ -298,10 +410,15 @@ public class AccountService {
 
     private List<RestrictionView> activeRestrictions(String accountId) {
         // IDs, rather than DATETIME seconds, distinguish restrictions created in the same second.
-        return jdbc.query("SELECT id, change_reason FROM account_status_log WHERE account_id = ? "
-                        + "AND new_status = 'FROZEN' AND id > COALESCE((SELECT MAX(s.id) FROM account_status_log s "
-                        + "WHERE s.account_id = ? AND s.new_status = 'ACTIVE'), 0) ORDER BY id",
-                (rs, n) -> new RestrictionView(rs.getLong("id"), rs.getString("change_reason")), accountId, accountId);
+        return jdbc.query("SELECT f.id, f.change_reason, r.restriction_id AS approved_id FROM account_status_log f "
+                        + "LEFT JOIN risk_freeze_release r ON r.restriction_id = f.id WHERE f.account_id = ? "
+                        + "AND f.new_status = 'FROZEN' AND f.id > COALESCE((SELECT MAX(s.id) FROM account_status_log s "
+                        + "WHERE s.account_id = f.account_id AND s.new_status = 'ACTIVE'), 0) ORDER BY f.id",
+                (rs, n) -> {
+                    String reason = rs.getString("change_reason");
+                    String source = reason != null && reason.startsWith("RISK: ") ? "RISK" : "OPERATIONS";
+                    return new RestrictionView(rs.getLong("id"), reason, source, rs.getObject("approved_id") != null);
+                }, accountId);
     }
 
     private <T> T command(Actor actor, String type, String requestId, String requestHash,

@@ -42,14 +42,25 @@ public class AccountController {
         return ok(accounts.list(access.requireActor(request), page, pageSize), request);
     }
 
+    // 后台按授权范围查账户（独立接口）。字面量路径比 /{accountId} 更具体，Spring 会优先匹配这里。
+    // 后台查询必须带 reason，服务端写入 audit_log；普通客户调用返回 403。
+    @GetMapping("/scoped")
+    public ApiResponse<Page<AccountView>> scoped(@RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int pageSize, @RequestParam(required = false) String reason,
+            HttpServletRequest request) {
+        return ok(accounts.scoped(access.requireActor(request), page, pageSize, reason), request);
+    }
+
     @GetMapping("/{accountId}")
-    public ApiResponse<AccountView> get(@PathVariable String accountId, HttpServletRequest request) {
-        return ok(accounts.get(access.requireActor(request), accountId), request);
+    public ApiResponse<AccountView> get(@PathVariable String accountId,
+            @RequestParam(required = false) String reason, HttpServletRequest request) {
+        return ok(accounts.get(access.requireActor(request), accountId, reason), request);
     }
 
     @GetMapping("/{accountId}/balance")
-    public ApiResponse<BalanceView> balance(@PathVariable String accountId, HttpServletRequest request) {
-        return ok(accounts.balance(access.requireActor(request), accountId), request);
+    public ApiResponse<BalanceView> balance(@PathVariable String accountId,
+            @RequestParam(required = false) String reason, HttpServletRequest request) {
+        return ok(accounts.balance(access.requireActor(request), accountId, reason), request);
     }
 
     @PostMapping("/{accountId}/freeze")
@@ -85,8 +96,8 @@ public class AccountController {
             @RequestParam(defaultValue = "1") int page, @RequestParam(defaultValue = "20") int pageSize,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime startTime,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime endTime,
-            HttpServletRequest request) {
-        return ok(accounts.operations(access.requireActor(request), accountId, page, pageSize, startTime, endTime), request);
+            @RequestParam(required = false) String reason, HttpServletRequest request) {
+        return ok(accounts.operations(access.requireActor(request), accountId, page, pageSize, startTime, endTime, reason), request);
     }
 
     @GetMapping("/{accountId}/fund-entries")
@@ -94,8 +105,13 @@ public class AccountController {
             @RequestParam(defaultValue = "1") int page, @RequestParam(defaultValue = "20") int pageSize,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime startTime,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) OffsetDateTime endTime,
+            @RequestParam(required = false) String tradeNo, @RequestParam(required = false) String reason,
+            @RequestParam(required = false) String minAmount, @RequestParam(required = false) String maxAmount,
+            @RequestParam(required = false) String businessType, @RequestParam(required = false) String direction,
             HttpServletRequest request) {
-        return ok(accounts.fundEntries(access.requireActor(request), accountId, page, pageSize, startTime, endTime), request);
+        return ok(accounts.fundEntries(access.requireActor(request), accountId, page, pageSize,
+                new FundEntryFilter(startTime, endTime, tradeNo, minAmount, maxAmount, businessType, direction),
+                reason), request);
     }
 
     private <T> ApiResponse<T> ok(T data, HttpServletRequest request) {
